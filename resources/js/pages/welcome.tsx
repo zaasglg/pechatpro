@@ -1,8 +1,9 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { dashboard, login, register } from '@/routes';
+import { Camera, Printer, Image as ImageIcon, Clock, ArrowRight, UploadCloud } from 'lucide-react';
+import AppLogo from '@/components/app-logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Camera, Printer, Image as ImageIcon, Clock, ArrowRight, UploadCloud } from 'lucide-react';
+import { dashboard, login, register } from '@/routes';
 
 export default function Welcome({
     canRegister = true,
@@ -44,13 +45,9 @@ export default function Welcome({
         <>
             <Head title="PechatPRO | Мы монтируем и печатаем">
                 <link rel="preconnect" href="https://fonts.bunny.net" />
-                <link
-                    href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600&display=swap"
-                    rel="stylesheet"
-                />
             </Head>
 
-            <div className="relative min-h-screen bg-[#0a0a0a] text-white font-[instrument-sans] selection:bg-orange-500/30 overflow-hidden dark">
+            <div className="relative min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-orange-500/30 overflow-hidden dark">
                 {/* Фоновый блюр (светящееся пятно) */}
                 <div className="pointer-events-none absolute -top-1/2 left-1/2 w-full max-w-3xl -translate-x-1/2 aspect-square rounded-full bg-orange-500/15 blur-[120px]" />
 
@@ -58,12 +55,7 @@ export default function Welcome({
                 <header className="absolute inset-x-0 top-0 z-50">
                     <nav className="mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8">
                         <div className="flex flex-1">
-                            <span className="flex items-center gap-2 text-xl font-bold tracking-tight text-white">
-                                <div className="flex h-8 w-8 items-center justify-center rounded bg-orange-500">
-                                    <Camera className="h-5 w-5 text-white" />
-                                </div>
-                                PechatPRO
-                            </span>
+                           <AppLogo />
                         </div>
                         <div className="flex flex-1 justify-end gap-4">
                             {auth.user ? (
@@ -72,7 +64,7 @@ export default function Welcome({
                                         variant="outline"
                                         className="border-white/20 bg-white/5 text-white backdrop-blur hover:bg-white/10"
                                     >
-                                        В Dashboard
+                                        В панель
                                     </Button>
                                 </Link>
                             ) : (
@@ -115,7 +107,7 @@ export default function Welcome({
                             {auth.user ? (
                                 <Link href={dashboard()}>
                                     <Button size="lg" className="w-full sm:w-auto bg-orange-500 text-white hover:bg-orange-600 gap-2">
-                                        Перейти в Dashboard
+                                        Перейти в панель
                                         <ArrowRight className="h-4 w-4" />
                                     </Button>
                                 </Link>

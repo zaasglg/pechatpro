@@ -1,85 +1,94 @@
 <?php
 
+use App\Models\City;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 test('profile page is displayed', function () {
-    $user = User::factory()->create();
+    $city = City::factory()->create([
+        'name' => 'Алматы',
+    ]);
 
-    $response = $this
-        ->actingAs($user)
-        ->get(route('profile.edit'));
+    $user = User::factory()->create([
+        'city_id' => $city->id,
+        'instagram_url' => 'https://instagram.com/test.user',
+    ]);
 
-    $response->assertOk();
+    $this->actingAs($user)
+        ->get(route('profile.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('profile/show')
+            ->has('cities', 1)
+            ->where('user.city_id', $city->id)
+            ->where('user.city_name', 'Алматы')
+            ->where('user.phone', $user->phone)
+            ->where('user.name', $user->name),
+        );
 });
 
-test('profile information can be updated', function () {
+test('guests are redirected to login when opening profile page', function () {
+    $this->get(route('profile.show'))
+        ->assertRedirect(route('login'));
+});
+
+test('profile page includes the authenticated user phone number', function () {
     $user = User::factory()->create();
 
-    $response = $this
-        ->actingAs($user)
-        ->patch(route('profile.update'), [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+    $this->actingAs($user)
+        ->get(route('profile.show'))
+        ->assertSee($user->phone);
+});
 
-    $response
+test('authenticated users can update their profile information', function () {
+    $oldCity = City::factory()->create([
+        'name' => 'Алматы',
+    ]);
+    $newCity = City::factory()->create([
+        'name' => 'Астана',
+    ]);
+
+    $user = User::factory()->create([
+        'city_id' => $oldCity->id,
+        'name' => 'Старое имя',
+        'phone' => '+77011234567',
+        'instagram_url' => 'https://instagram.com/old.profile',
+    ]);
+
+    $this->actingAs($user)
+        ->put(route('profile.update'), [
+            'city_id' => $newCity->id,
+            'name' => 'Новое имя',
+            'phone' => '+7 777 123 45 67',
+            'instagram_url' => 'https://www.instagram.com/new.profile/',
+        ])
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('profile.edit'));
+        ->assertRedirect(route('profile.show'))
+        ->assertSessionHas('status', 'Профиль обновлен.');
 
     $user->refresh();
 
-    expect($user->name)->toBe('Test User');
-    expect($user->email)->toBe('test@example.com');
-    expect($user->email_verified_at)->toBeNull();
+    expect($user->name)->toBe('Новое имя')
+        ->and($user->city_id)->toBe($newCity->id)
+        ->and($user->phone)->toBe('+77771234567')
+        ->and($user->instagram_url)->toBe('https://www.instagram.com/new.profile');
 });
 
-test('email verification status is unchanged when the email address is unchanged', function () {
+test('profile information update validates instagram url', function () {
+    $city = City::factory()->create([
+        'name' => 'Алматы',
+    ]);
+
     $user = User::factory()->create();
 
-    $response = $this
-        ->actingAs($user)
-        ->patch(route('profile.update'), [
-            'name' => 'Test User',
-            'email' => $user->email,
-        ]);
-
-    $response
-        ->assertSessionHasNoErrors()
-        ->assertRedirect(route('profile.edit'));
-
-    expect($user->refresh()->email_verified_at)->not->toBeNull();
-});
-
-test('user can delete their account', function () {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->delete(route('profile.destroy'), [
-            'password' => 'password',
-        ]);
-
-    $response
-        ->assertSessionHasNoErrors()
-        ->assertRedirect(route('home'));
-
-    $this->assertGuest();
-    expect($user->fresh())->toBeNull();
-});
-
-test('correct password must be provided to delete account', function () {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->from(route('profile.edit'))
-        ->delete(route('profile.destroy'), [
-            'password' => 'wrong-password',
-        ]);
-
-    $response
-        ->assertSessionHasErrors('password')
-        ->assertRedirect(route('profile.edit'));
-
-    expect($user->fresh())->not->toBeNull();
+    $this->actingAs($user)
+        ->from(route('profile.show'))
+        ->put(route('profile.update'), [
+            'city_id' => $city->id,
+            'name' => 'Имя',
+            'phone' => '+77011234567',
+            'instagram_url' => 'https://example.com/profile',
+        ])
+        ->assertSessionHasErrors(['instagram_url'])
+        ->assertRedirect(route('profile.show'));
 });

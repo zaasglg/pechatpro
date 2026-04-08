@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -39,9 +40,41 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $this->authenticatedUser($request),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+        ];
+    }
+
+    /**
+     * Transform the authenticated user into stable frontend props.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function authenticatedUser(Request $request): ?array
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user === null) {
+            return null;
+        }
+
+        return [
+            'id' => $user->id,
+            'city_id' => $user->city_id,
+            'city_name' => $user->city?->name,
+            'instagram_url' => $user->instagram_url,
+            'name' => $user->name,
+            'phone' => $user->phone,
+            'avatar' => $user->avatar,
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
+            'roles' => $user->roles()->pluck('name')->values()->all(),
+            'canApprovePhotographers' => $user->hasRole('Админ') || $user->hasRole('Модератор'),
+            'canModerateProjects' => $user->hasRole('Модератор'),
+            'canMontageProjects' => $user->hasRole('Монтажер'),
+            'canPrintProjects' => $user->hasRole('Печать'),
         ];
     }
 }

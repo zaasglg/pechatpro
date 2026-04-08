@@ -1,46 +1,28 @@
-// Components
-import { Form, Head } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { logout } from '@/routes';
-import { send } from '@/routes/verification';
 
-export default function VerifyEmail({ status }: { status?: string }) {
+export default function VerifyEmail() {
     return (
         <>
-            <Head title="Email verification" />
+            <Head title="Подтверждение контакта" />
 
-            {status === 'verification-link-sent' && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
-                    A new verification link has been sent to the email address
-                    you provided during registration.
+            <div className="space-y-6 text-center">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-300">
+                    Подтверждение электронной почты отключено. Для входа
+                    используется номер телефона.
                 </div>
-            )}
 
-            <Form {...send.form()} className="space-y-6 text-center">
-                {({ processing }) => (
-                    <>
-                        <Button disabled={processing} variant="secondary">
-                            {processing && <Spinner />}
-                            Resend verification email
-                        </Button>
-
-                        <TextLink
-                            href={logout()}
-                            className="mx-auto block text-sm"
-                        >
-                            Log out
-                        </TextLink>
-                    </>
-                )}
-            </Form>
+                <TextLink href={logout()} className="mx-auto block text-sm">
+                    Выйти
+                </TextLink>
+            </div>
         </>
     );
 }
 
 VerifyEmail.layout = {
-    title: 'Verify email',
+    title: 'Подтверждение контакта',
     description:
-        'Please verify your email address by clicking on the link we just emailed to you.',
+        'Подтверждение электронной почты больше не используется в приложении',
 };

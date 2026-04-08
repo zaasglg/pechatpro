@@ -4,11 +4,16 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\City;
+use App\Models\User;
+use App\Support\PhoneNumber;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -40,6 +45,27 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $phone = PhoneNumber::normalize($request->string('phone')->toString());
+
+            if (! filled($phone)) {
+                return null;
+            }
+
+            $user = User::query()->where('phone', $phone)->first();
+
+            if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
+                return null;
+            }
+
+            if (! $user->isApproved()) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => 'Ждите подтверждение аккаунта. Мы свяжемся с вами после проверки.',
+                ]);
+            }
+
+            return $user;
+        });
     }
 
     /**
@@ -48,25 +74,22 @@ class FortifyServiceProvider extends ServiceProvider
     private function configureViews(): void
     {
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'canRegister' => Features::enabled(Features::registration()),
             'status' => $request->session()->get('status'),
         ]));
 
-        Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
-            'email' => $request->email,
-            'token' => $request->route('token'),
+        Fortify::registerView(fn (Request $request) => Inertia::render('auth/register', [
+            'cities' => City::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (City $city): array => [
+                    'id' => $city->id,
+                    'name' => $city->name,
+                ])
+                ->values(),
+            'registrationPendingApproval' => (bool) $request->session()->get('registration_pending_approval', false),
+            'registrationPendingApprovalToken' => $request->session()->get('registration_pending_approval_token'),
         ]));
-
-        Fortify::requestPasswordResetLinkView(fn (Request $request) => Inertia::render('auth/forgot-password', [
-            'status' => $request->session()->get('status'),
-        ]));
-
-        Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [
-            'status' => $request->session()->get('status'),
-        ]));
-
-        Fortify::registerView(fn () => Inertia::render('auth/register'));
 
         Fortify::twoFactorChallengeView(fn () => Inertia::render('auth/two-factor-challenge'));
 
@@ -83,7 +106,9 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('login', function (Request $request) {
-            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
+            $username = PhoneNumber::normalize($request->input(Fortify::username()))
+                ?? $request->input(Fortify::username());
+            $throttleKey = Str::transliterate(Str::lower($username.'|'.$request->ip()));
 
             return Limit::perMinute(5)->by($throttleKey);
         });

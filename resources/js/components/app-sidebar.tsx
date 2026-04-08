@@ -1,7 +1,12 @@
-import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import { BarChart3, Folder, MapPinned, Printer, ShieldCheck, WandSparkles } from 'lucide-react';
+import { index as cityIndex } from '@/actions/App/Http/Controllers/Admin/CityController';
+import { index as moderatorProjectIndex } from '@/actions/App/Http/Controllers/Admin/ModeratorProjectController';
+import { index as photographerApprovalIndex } from '@/actions/App/Http/Controllers/Admin/PhotographerApprovalController';
+import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
+import { index as projectIndex } from '@/actions/App/Http/Controllers/PhotographerProjectController';
+import { index as printProjectIndex } from '@/actions/App/Http/Controllers/PrintProjectController';
 import AppLogo from '@/components/app-logo';
-import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -16,34 +21,72 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
-
 export function AppSidebar() {
+    const { auth } = usePage().props;
+    const mainNavItems: NavItem[] = [
+        {
+            title: 'Аналитика',
+            href: dashboard(),
+            icon: BarChart3,
+        },
+        ...(auth.user?.roles.includes('Фотограф')
+            ? [
+                  {
+                      title: 'Проекты',
+                      href: projectIndex(),
+                      icon: Folder,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canApprovePhotographers
+            ? [
+                  {
+                      title: 'Города',
+                      href: cityIndex(),
+                      icon: MapPinned,
+                  } satisfies NavItem,
+                  {
+                      title: 'Подтверждения',
+                      href: photographerApprovalIndex(),
+                      icon: ShieldCheck,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canModerateProjects
+            ? [
+                  {
+                      title: 'Проекты модератора',
+                      href: moderatorProjectIndex(),
+                      icon: ShieldCheck,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canMontageProjects
+            ? [
+                  {
+                      title: 'Монтаж',
+                      href: montageProjectIndex(),
+                      icon: WandSparkles,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canPrintProjects
+            ? [
+                  {
+                      title: 'Печать',
+                      href: printProjectIndex(),
+                      icon: Printer,
+                  } satisfies NavItem,
+              ]
+            : []),
+    ];
+
     return (
-        <Sidebar collapsible="icon" variant="inset">
+        <Sidebar collapsible="icon" variant="sidebar" className="border-none bg-transparent">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
+                        <SidebarMenuButton size="lg" asChild className="hover:bg-white/5 data-[state=open]:bg-white/5 transition-colors">
                             <Link href={dashboard()} prefetch>
                                 <AppLogo />
                             </Link>
@@ -57,7 +100,6 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

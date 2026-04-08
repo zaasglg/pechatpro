@@ -3,7 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
-import SettingsLayout from '@/layouts/settings/layout';
+// Removed settings layout import
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -13,10 +13,10 @@ createInertiaApp({
         switch (true) {
             case name === 'welcome':
                 return null;
+            case name.startsWith('client/'):
+                return null;
             case name.startsWith('auth/'):
                 return AuthLayout;
-            case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
             default:
                 return AppLayout;
         }
@@ -30,5 +30,5 @@ createInertiaApp({
     },
 });
 
-// This will set light / dark mode on load...
+// The application is locked to dark mode on load.
 initializeTheme();

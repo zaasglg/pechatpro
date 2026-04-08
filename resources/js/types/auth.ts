@@ -1,9 +1,16 @@
 export type User = {
     id: number;
+    city_id?: number | null;
+    city_name?: string | null;
     name: string;
-    email: string;
+    phone: string;
     avatar?: string;
-    email_verified_at: string | null;
+    instagram_url?: string;
+    roles: string[];
+    canApprovePhotographers?: boolean;
+    canModerateProjects?: boolean;
+    canMontageProjects?: boolean;
+    canPrintProjects?: boolean;
     two_factor_enabled?: boolean;
     created_at: string;
     updated_at: string;
@@ -11,7 +18,7 @@ export type User = {
 };
 
 export type Auth = {
-    user: User;
+    user: User | null;
 };
 
 export type TwoFactorSetupData = {

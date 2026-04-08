@@ -32,12 +32,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Username / Email
+    | Username / Contact Field
     |--------------------------------------------------------------------------
     |
     | This value defines which model attribute should be considered as your
-    | application's "username" field. Typically, this might be the email
-    | address of the users but you are free to change this value here.
+    | application's "username" field. In this application, users
+    | authenticate with their phone number instead of an email address.
     |
     | Out of the box, Fortify expects forgot password and reset password
     | requests to have a field named 'email'. If the application uses
@@ -45,9 +45,9 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => 'phone',
 
-    'email' => 'email',
+    'email' => 'phone',
 
     /*
     |--------------------------------------------------------------------------
@@ -60,7 +60,7 @@ return [
     |
     */
 
-    'lowercase_usernames' => true,
+    'lowercase_usernames' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -109,7 +109,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | By default, Fortify will throttle logins to five requests per minute for
-    | every email and IP address combination. However, if you would like to
+    | every phone number and IP address combination. However, if you would like to
     | specify a custom rate limiter to call then you may specify it here.
     |
     */
@@ -145,8 +145,6 @@ return [
 
     'features' => [
         Features::registration(),
-        Features::resetPasswords(),
-        Features::emailVerification(),
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,
