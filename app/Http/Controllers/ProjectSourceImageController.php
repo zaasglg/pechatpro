@@ -7,82 +7,71 @@ use App\Models\Project;
 use App\Models\ProjectSourceImage;
 use App\Models\ProjectStage;
 use App\Models\ProjectStageDefinition;
+use App\Support\ProjectSourceImagePreviewGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class ProjectSourceImageController extends Controller
 {
     /**
-     * Display the source image upload page for the selected project.
+     * Redirect legacy source image page to the project tabs view.
      */
-    public function show(Request $request, Project $project): Response
+    public function show(Request $request, Project $project): RedirectResponse
     {
         $project = $this->resolveProject($request, $project);
         $project->ensureWorkflowState();
 
-        return Inertia::render('projects/source-images', [
-            'project' => [
-                'id' => $project->id,
-                'name' => $project->name,
-                'className' => $project->class_name,
-                'albumType' => $project->album_type,
-                'albumSize' => $project->album_size,
-                'coverType' => $project->cover_type,
-            ],
-            'sourceImages' => $project->sourceImages()
-                ->latest()
-                ->get()
-                ->map(fn (ProjectSourceImage $sourceImage): array => [
-                    'id' => $sourceImage->id,
-                    'name' => $sourceImage->original_name,
-                    'url' => Storage::disk('public')->url($sourceImage->path),
-                    'sizeBytes' => $sourceImage->size_bytes,
-                    'uploadedAt' => $sourceImage->created_at?->toIso8601String(),
-                ])
-                ->values(),
-            'workflow' => $this->workflowData($project),
-            'status' => $request->session()->get('status'),
+        return to_route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
         ]);
     }
 
     /**
      * Store new source images for the selected project.
      */
-    public function store(StoreProjectSourceImagesRequest $request, Project $project): RedirectResponse
-    {
+    public function store(
+        StoreProjectSourceImagesRequest $request,
+        Project $project,
+        ProjectSourceImagePreviewGenerator $previewGenerator,
+    ): RedirectResponse {
         $project = $this->resolveProject($request, $project);
         $project->ensureWorkflowState();
         $storedPaths = collect();
 
         try {
-            $project->sourceImages()->createMany(
-                collect($request->file('images'))
-                    ->map(function (UploadedFile $image) use ($project, $storedPaths): array {
-                        $path = $image->store("project-source-images/{$project->id}", 'public');
-                        $storedPaths->push($path);
+            collect($request->file('images'))
+                ->each(function (UploadedFile $image) use ($project, $previewGenerator, $storedPaths): void {
+                    $path = $image->store("project-source-images/{$project->id}", 'public');
+                    $storedPaths->push($path);
 
-                        return [
-                            'path' => $path,
-                            'original_name' => $image->getClientOriginalName(),
-                            'size_bytes' => (int) $image->getSize(),
-                            'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
-                        ];
-                    })
-                    ->all(),
-            );
+                    $sourceImage = $project->sourceImages()->create([
+                        'path' => $path,
+                        'original_name' => $image->getClientOriginalName(),
+                        'size_bytes' => (int) $image->getSize(),
+                        'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
+                    ]);
+
+                    $previewPath = $previewGenerator->ensureGeneratedPreviewPath($sourceImage);
+
+                    if ($previewPath !== null && $previewPath !== $sourceImage->path) {
+                        $storedPaths->push($previewPath);
+                    }
+                });
         } catch (\Throwable $throwable) {
             $this->deleteStoredPaths($storedPaths);
 
             throw $throwable;
         }
 
-        return to_route('projects.source-images.show', $project)
+        return to_route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ])
             ->with('status', 'Исходники успешно загружены.');
     }
 
@@ -110,12 +99,50 @@ class ProjectSourceImageController extends Controller
         if ($newProjectStage?->status !== ProjectStage::STATUS_COMPLETED) {
             $project->advanceToStage(ProjectStageDefinition::SLUG_PHOTOGRAPHER_SHOT);
 
-            return to_route('projects.source-images.show', $project)
+            return to_route('projects.show', [
+                'project' => $project,
+                'tab' => 'source-images',
+            ])
                 ->with('status', 'Проект переведен на этап "Фотограф снял".');
         }
 
-        return to_route('projects.source-images.show', $project)
+        return to_route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ])
             ->with('status', 'Этап уже обновлен.');
+    }
+
+    /**
+     * Delete a source image that belongs to the selected project.
+     */
+    public function destroy(
+        Request $request,
+        Project $project,
+        ProjectSourceImage $sourceImage,
+    ): RedirectResponse {
+        $project = $this->resolveProject($request, $project);
+        $sourceImage = $project->sourceImages()
+            ->whereKey($sourceImage->getKey())
+            ->firstOrFail();
+
+        $sourceImageName = $sourceImage->original_name;
+        $pathsToDelete = array_values(array_unique(array_filter([
+            $sourceImage->path,
+            ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id),
+        ])));
+
+        $sourceImage->delete();
+
+        if ($pathsToDelete !== []) {
+            Storage::disk('public')->delete($pathsToDelete);
+        }
+
+        return to_route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ])
+            ->with('status', "Исходник {$sourceImageName} удален.");
     }
 
     private function resolveProject(Request $request, Project $project): Project
@@ -124,29 +151,6 @@ class ProjectSourceImageController extends Controller
             ->projects()
             ->whereKey($project->getKey())
             ->firstOrFail();
-    }
-
-    /**
-     * Build workflow state for the source image page.
-     *
-     * @return array{currentStageName: string|null, currentStageSlug: string|null, canMarkReady: bool}
-     */
-    private function workflowData(Project $project): array
-    {
-        $currentStage = $project->currentProjectStage();
-        $currentStageSlug = $currentStage?->stageDefinition?->slug;
-        $newProjectStage = $project->projectStages()
-            ->whereHas('stageDefinition', function ($query): void {
-                $query->where('slug', ProjectStageDefinition::SLUG_NEW_PROJECT);
-            })
-            ->first();
-
-        return [
-            'currentStageName' => $currentStage?->stageDefinition?->name,
-            'currentStageSlug' => $currentStageSlug,
-            'canMarkReady' => $project->sourceImages()->exists()
-                && $newProjectStage?->status !== ProjectStage::STATUS_COMPLETED,
-        ];
     }
 
     /**

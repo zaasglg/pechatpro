@@ -22,7 +22,7 @@ test('authenticated user can upload an avatar', function () {
     $user->refresh();
 
     expect($user->avatar_path)->not->toBeNull()
-        ->and($user->avatar)->toBe(Storage::disk('public')->url($user->avatar_path));
+        ->and($user->avatar)->toBe('/storage/'.$user->avatar_path);
 
     Storage::disk('public')->assertExists($user->avatar_path);
 });

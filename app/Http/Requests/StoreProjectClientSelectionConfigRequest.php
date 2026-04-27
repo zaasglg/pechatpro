@@ -23,9 +23,7 @@ class StoreProjectClientSelectionConfigRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'slots' => ['required', 'array', 'min:1', 'max:20'],
-            'slots.*.name' => ['required', 'string', 'max:255'],
-            'slots.*.max_likes' => ['required', 'integer', 'min:1', 'max:30'],
+            'selection_deadline_at' => ['required', 'date', 'after:now'],
         ];
     }
 }

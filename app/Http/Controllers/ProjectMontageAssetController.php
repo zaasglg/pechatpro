@@ -8,10 +8,13 @@ use App\Http\Requests\StoreProjectMontageAssetsRequest;
 use App\Models\Project;
 use App\Models\ProjectMontageAsset;
 use App\Models\ProjectStageDefinition;
+use App\Support\ProjectMontageAssetPreviewGenerator;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -20,6 +23,8 @@ use Inertia\Response;
 class ProjectMontageAssetController extends Controller
 {
     use ResolvesAssignedMontageProject;
+
+    public function __construct(private ProjectMontageAssetPreviewGenerator $previewGenerator) {}
 
     public function show(Request $request, Project $project): Response
     {
@@ -32,6 +37,23 @@ class ProjectMontageAssetController extends Controller
             'montageRevisionRequests.montageAsset',
         ]);
 
+        $viewerId = $request->user()?->id;
+        $isDesignerViewer = $project->designer_user_id !== null
+            && $project->designer_user_id === $viewerId;
+
+        $visibleMontageAssets = $isDesignerViewer
+            ? $project->montageAssets->where('uploaded_by_user_id', $viewerId)->values()
+            : $project->montageAssets;
+
+        $selectedImagesCount = $project->sourceImages()
+            ->whereHas('clientSelectionSubmissionImages')
+            ->count();
+
+        $designerArchiveAvailable = $isDesignerViewer
+            && $project->montageAssets
+                ->where('uploaded_by_user_id', '!==', $viewerId)
+                ->isNotEmpty();
+
         return Inertia::render('montage/projects/works', [
             'project' => [
                 'id' => $project->id,
@@ -42,16 +64,24 @@ class ProjectMontageAssetController extends Controller
                 'coverType' => $project->cover_type,
                 'photographerName' => $project->photographer?->name,
             ],
-            'montageAssets' => $project->montageAssets
-                ->map(fn (ProjectMontageAsset $asset): array => [
-                    'id' => $asset->id,
-                    'name' => $asset->original_name,
-                    'url' => Storage::disk('public')->url($asset->path),
-                    'sizeBytes' => $asset->size_bytes,
-                    'uploadedAt' => $asset->created_at?->toIso8601String(),
-                    'requestedForRevision' => $project->montageRevisionRequests
-                        ->contains('project_montage_asset_id', $asset->id),
-                ])
+            'montageAssets' => $visibleMontageAssets
+                ->map(function (ProjectMontageAsset $asset) use ($project): array {
+                    $previewPath = $this->previewGenerator->resolvePreviewPath($asset);
+
+                    return [
+                        'id' => $asset->id,
+                        'name' => $asset->original_name,
+                        'url' => PublicStorageUrl::make($asset->path),
+                        'previewUrl' => $previewPath !== null
+                            ? PublicStorageUrl::make($previewPath)
+                            : null,
+                        'sizeBytes' => $asset->size_bytes,
+                        'mimeType' => $asset->mime_type,
+                        'uploadedAt' => $asset->created_at?->toIso8601String(),
+                        'requestedForRevision' => $project->montageRevisionRequests
+                            ->contains('project_montage_asset_id', $asset->id),
+                    ];
+                })
                 ->values(),
             'clientReview' => [
                 'submittedAt' => $project->montage_review_submitted_at?->toIso8601String(),
@@ -65,7 +95,16 @@ class ProjectMontageAssetController extends Controller
                     ->values()
                     ->all(),
             ],
-            'workflow' => $this->workflowData($project),
+            'clientSelection' => [
+                'selectedImagesCount' => $selectedImagesCount,
+                'archiveUrl' => $isDesignerViewer
+                    ? route('montage.projects.works.archive', $project)
+                    : route('montage.projects.client-selection.archive', $project),
+                'archiveAvailable' => $isDesignerViewer
+                    ? $designerArchiveAvailable
+                    : $selectedImagesCount > 0,
+            ],
+            'workflow' => $this->workflowData($request, $project),
             'status' => $request->session()->get('status'),
         ]);
     }
@@ -77,14 +116,15 @@ class ProjectMontageAssetController extends Controller
         $storedPaths = collect();
 
         try {
-            $project->montageAssets()->createMany(
+            $createdAssets = $project->montageAssets()->createMany(
                 collect($request->file('images'))
-                    ->map(function (UploadedFile $image) use ($project, $storedPaths): array {
+                    ->map(function (UploadedFile $image) use ($project, $request, $storedPaths): array {
                         $path = $image->store("project-montage-assets/{$project->id}", 'public');
                         $storedPaths->push($path);
 
                         return [
                             'path' => $path,
+                            'uploaded_by_user_id' => $request->user()?->id,
                             'original_name' => $image->getClientOriginalName(),
                             'size_bytes' => (int) $image->getSize(),
                             'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
@@ -92,6 +132,14 @@ class ProjectMontageAssetController extends Controller
                     })
                     ->all(),
             );
+
+            foreach ($createdAssets as $asset) {
+                $previewPath = $this->previewGenerator->ensureGeneratedPreviewPath($asset);
+
+                if ($previewPath !== null && $previewPath !== $asset->path) {
+                    $storedPaths->push($previewPath);
+                }
+            }
         } catch (\Throwable $throwable) {
             $this->deleteStoredPaths($storedPaths);
 
@@ -121,6 +169,7 @@ class ProjectMontageAssetController extends Controller
         $image = $request->file('image');
         $newPath = $image->store("project-montage-assets/{$project->id}", 'public');
         $oldPath = $asset->path;
+        $oldPreviewPath = ProjectMontageAssetPreviewGenerator::previewPathForId($asset->id);
 
         $asset->update([
             'path' => $newPath,
@@ -128,6 +177,9 @@ class ProjectMontageAssetController extends Controller
             'size_bytes' => (int) $image->getSize(),
             'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
         ]);
+
+        Storage::disk('public')->delete($oldPreviewPath);
+        $this->previewGenerator->ensureGeneratedPreviewPath($asset->refresh());
 
         if ($oldPath !== $newPath) {
             Storage::disk('public')->delete($oldPath);
@@ -154,22 +206,39 @@ class ProjectMontageAssetController extends Controller
             ]);
         }
 
-        $project->advanceToStage(ProjectStageDefinition::SLUG_MODERATION);
+        DB::transaction(function () use ($project): void {
+            if ($project->montage_review_published_at !== null) {
+                $project->montageRevisionRequests()->delete();
+
+                $project->forceFill([
+                    'montage_review_submitted_at' => null,
+                    'montage_review_comment' => null,
+                ])->save();
+            }
+
+            $project->advanceToStage(ProjectStageDefinition::SLUG_MODERATION);
+        });
 
         return to_route('montage.projects.index')
-            ->with('status', 'Готовые работы отправлены модератору на проверку.');
+            ->with('status', $project->designer_user_id === $request->user()?->id
+                ? 'Дизайн отправлен модератору на проверку.'
+                : 'Работы монтажёра отправлены модератору для передачи дизайнеру.');
     }
 
     /**
-     * @return array{currentStageName: string|null, currentStageSlug: string|null, canMarkReady: bool}
+     * @return array{currentStageName: string|null, currentStageSlug: string|null, assignedRole: 'montage'|'designer', canMarkReady: bool}
      */
-    private function workflowData(Project $project): array
+    private function workflowData(Request $request, Project $project): array
     {
         $currentStage = $project->currentProjectStage();
 
         return [
             'currentStageName' => $currentStage?->stageDefinition?->name,
             'currentStageSlug' => $currentStage?->stageDefinition?->slug,
+            'assignedRole' => $project->designer_user_id !== null
+                && $project->designer_user_id === $request->user()?->id
+                    ? 'designer'
+                    : 'montage',
             'canMarkReady' => $project->montageAssets()->exists()
                 && $currentStage?->stageDefinition?->slug === ProjectStageDefinition::SLUG_MONTAGE,
         ];

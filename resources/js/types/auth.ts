@@ -8,6 +8,8 @@ export type User = {
     instagram_url?: string;
     roles: string[];
     canApprovePhotographers?: boolean;
+    canManageProjectPrices?: boolean;
+    canManageUsers?: boolean;
     canModerateProjects?: boolean;
     canMontageProjects?: boolean;
     canPrintProjects?: boolean;

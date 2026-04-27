@@ -12,16 +12,22 @@ use Illuminate\Support\Collection;
 
 #[Fillable([
     'photographer_id',
+    'montage_user_id',
+    'designer_user_id',
     'name',
     'class_name',
     'album_type',
     'album_size',
     'cover_type',
     'page_count',
+    'portrait_count',
     'student_count',
     'print_quantity',
+    'unit_price',
+    'total_price',
     'client_selection_token',
     'client_selection_published_at',
+    'client_selection_deadline_at',
     'client_selection_submitted_at',
     'montage_review_token',
     'montage_review_published_at',
@@ -55,15 +61,16 @@ class Project extends Model
     public const COVER_TYPES = [
         'Мягкий',
         'Твердый',
+        'Кожаный',
     ];
 
     /**
      * @var array<string, array<int, string>>
      */
     public const COVER_TYPES_BY_ALBUM_TYPE = [
-        'Пластик' => ['Мягкий'],
+        'Пластик' => ['Мягкий', 'Твердый'],
         'Журнал' => ['Твердый'],
-        'Кожаный' => ['Твердый'],
+        'Кожаный' => ['Кожаный'],
     ];
 
     /**
@@ -91,10 +98,17 @@ class Project extends Model
     {
         return [
             'client_selection_published_at' => 'datetime',
+            'client_selection_deadline_at' => 'datetime',
             'client_selection_submitted_at' => 'datetime',
             'montage_review_published_at' => 'datetime',
             'montage_review_submitted_at' => 'datetime',
             'printing_ready_at' => 'datetime',
+            'page_count' => 'integer',
+            'portrait_count' => 'integer',
+            'student_count' => 'integer',
+            'print_quantity' => 'integer',
+            'unit_price' => 'decimal:2',
+            'total_price' => 'decimal:2',
         ];
     }
 
@@ -110,6 +124,16 @@ class Project extends Model
         return $this->belongsTo(User::class, 'photographer_id');
     }
 
+    public function montageUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'montage_user_id');
+    }
+
+    public function designerUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'designer_user_id');
+    }
+
     public function projectStages(): HasMany
     {
         return $this->hasMany(ProjectStage::class);
@@ -120,11 +144,24 @@ class Project extends Model
         return $this->hasMany(ProjectSourceImage::class);
     }
 
+    public function designFiles(): HasMany
+    {
+        return $this->hasMany(ProjectDesignFile::class)
+            ->latest('id');
+    }
+
     public function clientSelectionSlots(): HasMany
     {
         return $this->hasMany(ProjectClientSelectionSlot::class)
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    public function clientSelectionSubmissions(): HasMany
+    {
+        return $this->hasMany(ProjectClientSelectionSubmission::class)
+            ->latest('submitted_at')
+            ->latest('id');
     }
 
     public function montageAssets(): HasMany
@@ -168,6 +205,12 @@ class Project extends Model
     {
         $this->createMissingStages();
         $this->ensureWorkflowState();
+    }
+
+    public function clientSelectionDeadlinePassed(): bool
+    {
+        return $this->client_selection_deadline_at !== null
+            && now()->greaterThan($this->client_selection_deadline_at);
     }
 
     public function ensureWorkflowState(): void

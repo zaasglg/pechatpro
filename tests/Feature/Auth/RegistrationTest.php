@@ -85,8 +85,8 @@ test('new users receive the photographer role after registration', function () {
     expect($user->city_id)->toBe($this->city->id);
 });
 
-test('registration requires an instagram profile link', function () {
-    $response = $this->from(route('register'))->post(route('register.store'), [
+test('registration can be completed without an instagram profile link', function () {
+    $response = $this->post(route('register.store'), [
         'city_id' => $this->city->id,
         'name' => 'No Instagram User',
         'phone' => '+77010001122',
@@ -94,11 +94,11 @@ test('registration requires an instagram profile link', function () {
         'password_confirmation' => 'password',
     ]);
 
-    $response
-        ->assertRedirect(route('register', absolute: false))
-        ->assertSessionHasErrors(['instagram_url']);
+    $response->assertRedirect(route('register', absolute: false));
 
-    expect(User::query()->where('phone', '+77010001122')->exists())->toBeFalse();
+    $user = User::query()->where('phone', '+77010001122')->firstOrFail();
+
+    expect($user->instagram_url)->toBeNull();
 });
 
 test('registration requires an instagram profile url', function () {

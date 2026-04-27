@@ -8,6 +8,38 @@ use Illuminate\Validation\Rules\File;
 
 class StoreProjectMontageAssetsRequest extends FormRequest
 {
+    /**
+     * @var array<int, string>
+     */
+    private const ALLOWED_IMAGE_EXTENSIONS = [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif',
+        'bmp',
+        'svg',
+        'avif',
+        'heic',
+        'heif',
+        'tif',
+        'tiff',
+        'raf',
+        'arw',
+        'cr2',
+        'cr3',
+        'dng',
+        'nef',
+        'nrw',
+        'orf',
+        'pef',
+        'rw2',
+        'sr2',
+        'srf',
+        'srw',
+        'x3f',
+    ];
+
     public function authorize(): bool
     {
         return $this->user() !== null;
@@ -22,9 +54,8 @@ class StoreProjectMontageAssetsRequest extends FormRequest
             'images' => ['required', 'array', 'min:1', 'max:30'],
             'images.*' => [
                 'required',
-                File::image()
-                    ->types(['jpg', 'jpeg', 'png', 'webp'])
-                    ->max(10 * 1024),
+                File::types(self::ALLOWED_IMAGE_EXTENSIONS)
+                    ->max('50mb'),
             ],
         ];
     }

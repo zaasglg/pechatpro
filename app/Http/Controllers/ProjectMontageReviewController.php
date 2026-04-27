@@ -7,20 +7,29 @@ use App\Http\Requests\UpdateProjectMontageReviewRequest;
 use App\Models\Project;
 use App\Models\ProjectMontageAsset;
 use App\Models\ProjectMontageRevisionRequest;
+use App\Support\ProjectMontageAssetPreviewGenerator;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ProjectMontageReviewController extends Controller
 {
+    public function __construct(private ProjectMontageAssetPreviewGenerator $previewGenerator) {}
+
     public function show(string $token): Response
     {
         $project = $this->resolveProjectByToken($token);
         $revisionRequests = $project->montageRevisionRequests
             ->keyBy('project_montage_asset_id');
+
+        $visibleAssets = $project->designer_user_id !== null
+            ? $project->montageAssets
+                ->where('uploaded_by_user_id', $project->designer_user_id)
+                ->values()
+            : $project->montageAssets;
 
         return Inertia::render('client/montage-reviews/show', [
             'project' => [
@@ -30,14 +39,19 @@ class ProjectMontageReviewController extends Controller
                 'token' => $project->montage_review_token,
                 'reviewSubmittedAt' => $project->montage_review_submitted_at?->toIso8601String(),
             ],
-            'images' => $project->montageAssets
+            'images' => $visibleAssets
                 ->map(function (ProjectMontageAsset $asset) use ($revisionRequests): array {
                     $revisionRequest = $revisionRequests->get($asset->id);
+                    $previewPath = $this->previewGenerator->resolvePreviewPath($asset);
 
                     return [
                         'id' => $asset->id,
                         'name' => $asset->original_name,
-                        'url' => Storage::disk('public')->url($asset->path),
+                        'url' => PublicStorageUrl::make($asset->path),
+                        'previewUrl' => $previewPath !== null
+                            ? PublicStorageUrl::make($previewPath)
+                            : null,
+                        'mimeType' => $asset->mime_type,
                         'sizeBytes' => $asset->size_bytes,
                         'selectedForRevision' => $revisionRequest !== null,
                         'comment' => $revisionRequest?->comment,
@@ -100,6 +114,7 @@ class ProjectMontageReviewController extends Controller
             ->mapWithKeys(fn (mixed $comment, mixed $assetId): array => [
                 (string) $assetId => trim((string) $comment),
             ]);
+        $hasRevisionRequests = $project->montageRevisionRequests()->exists();
 
         DB::transaction(function () use ($project, $comments): void {
             $project->montageRevisionRequests()
@@ -119,7 +134,9 @@ class ProjectMontageReviewController extends Controller
         });
 
         return to_route('client.montage-reviews.show', ['token' => $project->montage_review_token])
-            ->with('status', 'Замечания отправлены модератору.');
+            ->with('status', $hasRevisionRequests
+                ? 'Замечания отправлены модератору.'
+                : 'Готовые работы подтверждены. Модератор уже получил ваше подтверждение.');
     }
 
     private function resolveProjectByToken(string $token): Project

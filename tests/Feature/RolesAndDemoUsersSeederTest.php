@@ -16,6 +16,7 @@ test('roles and demo users seeder creates all configured roles', function () {
         'Админ',
         'Фотограф',
         'Монтажер',
+        'Дизайнер',
         'Печать',
         'Модератор',
     ]);
@@ -28,8 +29,9 @@ test('roles and demo users seeder assigns every demo user to the expected role',
         '+77010000001' => 'Админ',
         '+77010000002' => 'Фотограф',
         '+77010000003' => 'Монтажер',
-        '+77010000004' => 'Печать',
-        '+77010000005' => 'Модератор',
+        '+77010000004' => 'Дизайнер',
+        '+77010000005' => 'Печать',
+        '+77010000006' => 'Модератор',
     ];
 
     foreach ($expectedAssignments as $phone => $role) {
@@ -38,4 +40,26 @@ test('roles and demo users seeder assigns every demo user to the expected role',
         expect($user)->not->toBeNull();
         expect($user->hasRole($role))->toBeTrue();
     }
+});
+
+test('roles and demo users seeder creates many montage, designer and print demo users', function () {
+    $this->seed(RolesAndDemoUsersSeeder::class);
+
+    $montageUsersCount = User::query()
+        ->role('Монтажер')
+        ->where('name', 'like', 'Демо Монтажер%')
+        ->count();
+    $designerUsersCount = User::query()
+        ->role('Дизайнер')
+        ->where('name', 'like', 'Демо Дизайнер%')
+        ->count();
+
+    $printUsersCount = User::query()
+        ->role('Печать')
+        ->where('name', 'like', 'Демо Печать%')
+        ->count();
+
+    expect($montageUsersCount)->toBeGreaterThanOrEqual(41);
+    expect($designerUsersCount)->toBeGreaterThanOrEqual(41);
+    expect($printUsersCount)->toBeGreaterThanOrEqual(41);
 });

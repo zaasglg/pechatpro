@@ -23,6 +23,7 @@ test('admins can view photographers waiting for approval', function () {
     $pendingPhotographer = User::factory()->pendingApproval()->create([
         'name' => 'Новый Фотограф',
         'phone' => '+77017778811',
+        'instagram_url' => 'https://instagram.com/new.photographer',
     ]);
     $pendingPhotographer->assignRole('Фотограф');
 
@@ -40,7 +41,8 @@ test('admins can view photographers waiting for approval', function () {
             ->has('pendingPhotographers', 1)
             ->where('pendingPhotographers.0.id', $pendingPhotographer->id)
             ->where('pendingPhotographers.0.name', 'Новый Фотограф')
-            ->where('pendingPhotographers.0.phone', '+77017778811'),
+            ->where('pendingPhotographers.0.phone', '+77017778811')
+            ->where('pendingPhotographers.0.instagramUrl', 'https://instagram.com/new.photographer'),
         );
 });
 
@@ -60,6 +62,7 @@ test('moderators can view photographers waiting for approval', function () {
     $pendingPhotographer = User::factory()->pendingApproval()->create([
         'name' => 'Фотограф На Проверке',
         'phone' => '+77017778812',
+        'instagram_url' => 'https://instagram.com/pending.photographer',
     ]);
     $pendingPhotographer->assignRole('Фотограф');
 
@@ -71,7 +74,8 @@ test('moderators can view photographers waiting for approval', function () {
             ->has('pendingPhotographers', 1)
             ->where('pendingPhotographers.0.id', $pendingPhotographer->id)
             ->where('pendingPhotographers.0.name', 'Фотограф На Проверке')
-            ->where('pendingPhotographers.0.phone', '+77017778812'),
+            ->where('pendingPhotographers.0.phone', '+77017778812')
+            ->where('pendingPhotographers.0.instagramUrl', 'https://instagram.com/pending.photographer'),
         );
 });
 

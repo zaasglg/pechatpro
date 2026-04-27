@@ -16,6 +16,7 @@ beforeEach(function () {
         'Фотограф',
         'Модератор',
         'Монтажер',
+        'Дизайнер',
     ])->each(fn (string $role) => Role::findOrCreate($role, 'web'));
 });
 
@@ -25,8 +26,14 @@ test('moderators can publish ready works review link for client', function () {
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
+    $designer = User::factory()->create([
+        'approved_at' => now(),
+    ]);
+    $designer->assignRole('Дизайнер');
 
-    $project = Project::factory()->for($photographer, 'photographer')->create();
+    $project = Project::factory()->for($photographer, 'photographer')->create([
+        'designer_user_id' => $designer->id,
+    ]);
     $project->advanceToStage(ProjectStageDefinition::SLUG_MODERATION);
     ProjectMontageAsset::factory()->for($project)->create();
 
@@ -109,19 +116,42 @@ test('clients can submit montage revision requests with separate comments for ea
         ->value('comment'))->toBe('Сделать фото светлее и уменьшить отступ сверху.');
 });
 
-test('moderators can send project back to montage with client feedback', function () {
+test('clients can confirm ready works without revision requests', function () {
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create([
+        'montage_review_token' => 'montage-review-confirm',
+        'montage_review_published_at' => now(),
+    ]);
+    ProjectMontageAsset::factory()->for($project)->create();
+
+    $this->post(route('client.montage-reviews.submit', ['token' => $project->montage_review_token]), [
+        'comments' => [],
+    ])
+        ->assertRedirect(route('client.montage-reviews.show', ['token' => $project->montage_review_token]))
+        ->assertSessionHas('status', 'Готовые работы подтверждены. Модератор уже получил ваше подтверждение.');
+
+    $project->refresh();
+
+    expect($project->montage_review_submitted_at)->not()->toBeNull();
+    expect($project->montageRevisionRequests()->count())->toBe(0);
+});
+
+test('moderators can send project back to designer with client feedback', function () {
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
 
-    $montageUser = User::factory()->create([
+    $designer = User::factory()->create([
         'approved_at' => now(),
     ]);
-    $montageUser->assignRole('Монтажер');
+    $designer->assignRole('Дизайнер');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
 
     $project = Project::factory()->for($photographer, 'photographer')->create([
+        'designer_user_id' => $designer->id,
         'montage_review_token' => 'montage-review-back',
         'montage_review_published_at' => now(),
         'montage_review_submitted_at' => now(),
@@ -131,7 +161,7 @@ test('moderators can send project back to montage with client feedback', functio
     $montageStage = $project->projectStages()
         ->whereHas('stageDefinition', fn ($query) => $query->where('slug', ProjectStageDefinition::SLUG_MONTAGE))
         ->firstOrFail();
-    $montageStage->responsibleUsers()->sync([$montageUser->id]);
+    $montageStage->responsibleUsers()->sync([$designer->id]);
 
     $asset = ProjectMontageAsset::factory()->for($project)->create();
     ProjectMontageRevisionRequest::factory()->create([
@@ -143,7 +173,7 @@ test('moderators can send project back to montage with client feedback', functio
     $this->actingAs($moderator)
         ->post(route('moderator.projects.moderation.send-back-to-montage', $project))
         ->assertRedirect(route('moderator.projects.show', $project))
-        ->assertSessionHas('status', 'Проект возвращен на монтаж. Замечания клиента переданы монтажёру.');
+        ->assertSessionHas('status', 'Проект возвращен дизайнеру. Замечания клиента переданы на доработку.');
 
     $stages = $project->fresh()
         ->projectStages()
@@ -153,5 +183,5 @@ test('moderators can send project back to montage with client feedback', functio
 
     expect($stages[ProjectStageDefinition::SLUG_MONTAGE]->status)->toBe('in_progress');
     expect($stages[ProjectStageDefinition::SLUG_MONTAGE]->responsibleUsers->pluck('id')->all())
-        ->toBe([$montageUser->id]);
+        ->toBe([$designer->id]);
 });

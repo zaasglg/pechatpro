@@ -4,13 +4,17 @@ use App\Http\Controllers\Admin\CityController;
 use App\Http\Controllers\Admin\ModerationReviewController;
 use App\Http\Controllers\Admin\ModeratorProjectController;
 use App\Http\Controllers\Admin\PhotographerApprovalController;
+use App\Http\Controllers\Admin\ProjectPriceController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MontageProjectController;
 use App\Http\Controllers\PhotographerProjectController;
 use App\Http\Controllers\PrintProjectController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectClientSelectionController;
 use App\Http\Controllers\ProjectMontageAssetController;
+use App\Http\Controllers\ProjectMontageDownloadController;
 use App\Http\Controllers\ProjectMontageReviewController;
 use App\Http\Controllers\ProjectSourceImageController;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +23,8 @@ use Laravel\Fortify\Features;
 Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
+
+Route::post('locale', LocaleController::class)->name('locale.update');
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -40,6 +46,24 @@ Route::middleware(['auth', 'role:Админ|Модератор'])
             ->name('photographer-approvals.index');
         Route::post('photographer-approvals/{user}/approve', [PhotographerApprovalController::class, 'approve'])
             ->name('photographer-approvals.approve');
+        Route::delete('photographers/{user}', [PhotographerApprovalController::class, 'destroy'])
+            ->name('photographers.destroy');
+    });
+
+Route::middleware(['auth', 'role:Админ'])
+    ->prefix('admin/project-prices')
+    ->as('admin.project-prices.')
+    ->group(function (): void {
+        Route::get('/', [ProjectPriceController::class, 'index'])->name('index');
+    });
+
+Route::middleware(['auth', 'role:Админ'])
+    ->prefix('admin/users')
+    ->as('admin.users.')
+    ->group(function (): void {
+        Route::get('/', [AdminUserController::class, 'index'])->name('index');
+        Route::post('/{user}/reset-password', [AdminUserController::class, 'resetPassword'])
+            ->name('reset-password');
     });
 
 Route::middleware(['auth', 'role:Модератор'])
@@ -54,21 +78,41 @@ Route::middleware(['auth', 'role:Модератор'])
             ->name('client-selection.publish');
         Route::post('/{project}/client-selection/approve', [ModeratorProjectController::class, 'approveSelection'])
             ->name('client-selection.approve');
+        Route::get('/{project}/ready-works/archive', [ProjectMontageDownloadController::class, 'moderatorArchive'])
+            ->name('ready-works.archive');
+        Route::get('/{project}/ready-works/{asset}/download', [ProjectMontageDownloadController::class, 'moderatorDownload'])
+            ->name('ready-works.download');
+        Route::get('/{project}/source-images/archive', [ProjectMontageDownloadController::class, 'moderatorSourceImagesArchive'])
+            ->name('source-images.archive');
+        Route::get('/{project}/source-images/{sourceImage}/download', [ProjectMontageDownloadController::class, 'moderatorSourceImageDownload'])
+            ->name('source-images.download');
+        Route::get('/{project}/archive', [ProjectMontageDownloadController::class, 'moderatorProjectArchive'])
+            ->name('project.archive');
         Route::post('/{project}/moderation/publish-client-review', [ModerationReviewController::class, 'publishClientReview'])
             ->name('moderation.publish-client-review');
+        Route::post('/{project}/moderation/assign-designer', [ModerationReviewController::class, 'assignDesigner'])
+            ->name('moderation.assign-designer');
         Route::post('/{project}/moderation/send-back-to-montage', [ModerationReviewController::class, 'sendBackToMontage'])
             ->name('moderation.send-back-to-montage');
         Route::post('/{project}/moderation/approve', [ModerationReviewController::class, 'approve'])
             ->name('moderation.approve');
+        Route::post('/{project}/printing/complete', [ModerationReviewController::class, 'completePrinting'])
+            ->name('printing.complete');
+        Route::delete('/{project}', [ModeratorProjectController::class, 'destroy'])
+            ->name('destroy');
     });
 
-Route::middleware(['auth', 'role:Монтажер'])
+Route::middleware(['auth', 'role:Монтажер|Дизайнер'])
     ->prefix('montage/projects')
     ->as('montage.projects.')
     ->group(function (): void {
         Route::get('/', [MontageProjectController::class, 'index'])->name('index');
         Route::get('/{project}/works', [ProjectMontageAssetController::class, 'show'])->name('works.show');
         Route::post('/{project}/works', [ProjectMontageAssetController::class, 'store'])->name('works.store');
+        Route::get('/{project}/works/archive', [ProjectMontageDownloadController::class, 'montageArchive'])->name('works.archive');
+        Route::get('/{project}/client-selection/archive', [ProjectMontageDownloadController::class, 'montageClientSelectionArchive'])
+            ->name('client-selection.archive');
+        Route::get('/{project}/works/{asset}/download', [ProjectMontageDownloadController::class, 'montageDownload'])->name('works.download');
         Route::post('/{project}/works/{asset}/replace', [ProjectMontageAssetController::class, 'replace'])->name('works.replace');
         Route::post('/{project}/works/complete', [ProjectMontageAssetController::class, 'complete'])->name('works.complete');
     });
@@ -79,6 +123,8 @@ Route::middleware(['auth', 'role:Печать'])
     ->group(function (): void {
         Route::get('/', [PrintProjectController::class, 'index'])->name('index');
         Route::get('/{project}', [PrintProjectController::class, 'show'])->name('show');
+        Route::get('/{project}/archive', [ProjectMontageDownloadController::class, 'printArchive'])->name('archive');
+        Route::get('/{project}/works/{asset}/download', [ProjectMontageDownloadController::class, 'printDownload'])->name('works.download');
         Route::post('/{project}/complete', [PrintProjectController::class, 'complete'])->name('complete');
     });
 
@@ -92,6 +138,8 @@ Route::middleware(['auth', 'role:Фотограф'])
             ->name('source-images.show');
         Route::post('/{project}/source-images', [ProjectSourceImageController::class, 'store'])
             ->name('source-images.store');
+        Route::delete('/{project}/source-images/{sourceImage}', [ProjectSourceImageController::class, 'destroy'])
+            ->name('source-images.destroy');
         Route::post('/{project}/source-images/complete', [ProjectSourceImageController::class, 'complete'])
             ->name('source-images.complete');
         Route::get('/{project}', [PhotographerProjectController::class, 'show'])->name('show');
@@ -101,10 +149,12 @@ Route::middleware(['auth', 'role:Фотограф'])
 
 Route::get('client/projects/{token}', [ProjectClientSelectionController::class, 'show'])
     ->name('client.projects.show');
-Route::post('client/projects/{token}/toggle-selection', [ProjectClientSelectionController::class, 'toggleSelection'])
-    ->name('client.projects.toggle-selection');
+Route::post('client/projects/{token}/toggle-image-selection', [ProjectClientSelectionController::class, 'toggleImageSelection'])
+    ->name('client.projects.toggle-image-selection')
+    ->block();
 Route::post('client/projects/{token}/submit', [ProjectClientSelectionController::class, 'submitSelection'])
-    ->name('client.projects.submit');
+    ->name('client.projects.submit')
+    ->block();
 Route::get('client/montage-reviews/{token}', [ProjectMontageReviewController::class, 'show'])
     ->name('client.montage-reviews.show');
 Route::post('client/montage-reviews/{token}/toggle-selection', [ProjectMontageReviewController::class, 'toggleSelection'])

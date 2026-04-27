@@ -1,16 +1,34 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, Expand, Send, WandSparkles } from 'lucide-react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    Expand,
+    Send,
+    WandSparkles,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { submit, toggleSelection } from '@/actions/App/Http/Controllers/ProjectMontageReviewController';
-import { Badge } from '@/components/ui/badge';
+import {
+    submit,
+    toggleSelection,
+} from '@/actions/App/Http/Controllers/ProjectMontageReviewController';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
 type ImageItem = {
     id: number;
     name: string;
     url: string;
+    previewUrl: string | null;
+    mimeType: string | null;
     sizeBytes: number;
     selectedForRevision: boolean;
     comment: string | null;
@@ -28,16 +46,24 @@ type Props = {
     status?: string | null;
 };
 
-export default function ClientMontageReviewShow({ project, images, status }: Props) {
+export default function ClientMontageReviewShow({
+    project,
+    images,
+    status,
+}: Props) {
+    const { t } = useTranslations();
     const page = usePage<{ errors?: Record<string, string> }>();
     const [activeImageId, setActiveImageId] = useState<number | null>(null);
-    const activeImageIndex = images.findIndex((image) => image.id === activeImageId);
+    const activeImageIndex = images.findIndex(
+        (image) => image.id === activeImageId,
+    );
     const activeImage = activeImageIndex >= 0 ? images[activeImageIndex] : null;
     const selectedIds = new Set(
         images
             .filter((image) => image.selectedForRevision)
             .map((image) => image.id),
     );
+    const selectedCount = selectedIds.size;
     const isSubmitted = project.reviewSubmittedAt !== null;
     const form = useForm<{
         comments: Record<string, string>;
@@ -45,7 +71,9 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
         comments: buildSelectedComments(images),
     });
     const commentErrors = page.props.errors
-        ? Object.entries(page.props.errors).filter(([key]) => key.startsWith('comments.'))
+        ? Object.entries(page.props.errors).filter(([key]) =>
+              key.startsWith('comments.'),
+          )
         : [];
 
     useEffect(() => {
@@ -75,59 +103,13 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
 
     return (
         <>
-            <Head title={`Проверка работ | ${project.name}`} />
+            <Head title={`${t('client_review.meta_title')} | ${project.name}`} />
 
-            <div className="min-h-screen bg-[#050505] px-4 py-5 text-white md:px-8 md:py-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
-                    <section className="rounded-[2rem] border border-white/6 bg-white/[0.03] p-5 md:p-6">
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="space-y-4">
-                                <Badge
-                                    variant="outline"
-                                    className="border-orange-500/20 bg-orange-500/10 text-orange-200"
-                                >
-                                    {project.className}
-                                </Badge>
-
-                                <div className="space-y-2">
-                                    <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                                        {project.name}
-                                    </h1>
-                                    <p className="max-w-3xl text-sm leading-6 text-zinc-400">
-                                        Отметьте только те работы, которые нужно доработать. У каждой выбранной работы можно оставить отдельный комментарий, чтобы монтажёр сразу понял, что именно исправить.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <Button
-                                type="button"
-                                disabled={form.processing || isSubmitted}
-                                className="h-12 rounded-full bg-orange-500 px-6 text-base text-white hover:bg-orange-600 disabled:bg-white/8 disabled:text-zinc-500"
-                                onClick={handleSubmit}
-                            >
-                                <Send className="mr-2 h-4 w-4" />
-                                {isSubmitted ? 'Замечания отправлены' : 'Отправить замечания'}
-                            </Button>
-                        </div>
-
-                        <div className="mt-6 grid gap-3 md:grid-cols-3">
-                            <InfoCard
-                                label="Отмечено для правки"
-                                value={`${selectedIds.size}`}
-                                hint={formatWorkCount(selectedIds.size)}
-                            />
-                            <InfoCard
-                                label="Работ в подборке"
-                                value={`${images.length}`}
-                                hint="Нажмите на кадр, чтобы открыть его крупно"
-                            />
-                            <InfoCard
-                                label="Статус"
-                                value={isSubmitted ? 'Отправлено' : 'Ожидает ответа'}
-                                hint={isSubmitted ? 'Модератор уже получил ваш ответ' : 'После отправки замечания уйдут модератору'}
-                            />
-                        </div>
-                    </section>
+            <div className="min-h-screen bg-[#101a2d] px-4 py-5 text-white md:px-8 md:py-8">
+                <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
+                    <div className="flex justify-end">
+                        <LanguageSwitcher />
+                    </div>
 
                     {status && (
                         <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
@@ -143,137 +125,95 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
 
                     {commentErrors.length > 0 && (
                         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-                            Проверьте комментарии у отмеченных работ.
+                            {t('client_review.error.comments_summary')}
                         </div>
                     )}
 
                     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
                             {images.map((image) => {
                                 const isSelected = selectedIds.has(image.id);
 
                                 return (
-                                    <article
+                                    <button
                                         key={image.id}
+                                        type="button"
+                                        title={image.name}
+                                        onClick={() => setActiveImageId(image.id)}
                                         className={cn(
-                                            'group overflow-hidden rounded-[1.75rem] border bg-white/[0.03] transition',
+                                            'group relative aspect-square overflow-hidden rounded-xl border bg-slate-900/45 text-left transition',
                                             isSelected
-                                                ? 'border-orange-500/30 shadow-[0_0_0_1px_rgba(249,115,22,0.14)]'
-                                                : 'border-white/6 hover:border-white/12',
+                                                ? 'border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.24)]'
+                                                : 'border-white/6 hover:border-white/20',
                                         )}
                                     >
-                                        <div className="relative aspect-[4/4.8] overflow-hidden bg-black/40">
-                                            <button
-                                                type="button"
-                                                className="h-full w-full text-left"
-                                                onClick={() => setActiveImageId(image.id)}
-                                            >
-                                                <img
-                                                    src={image.url}
-                                                    alt={image.name}
-                                                    className="h-full w-full object-cover [transform:translateZ(0)]"
-                                                />
-                                                <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-                                                    {isSelected && (
-                                                        <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-medium text-white shadow-lg shadow-orange-500/20">
-                                                            Нужна правка
-                                                        </span>
-                                                    )}
-                                                    <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                                                        <Expand className="h-3.5 w-3.5" />
-                                                        Открыть
-                                                    </span>
-                                                </div>
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-3 p-3">
-                                            <Button
-                                                type="button"
-                                                disabled={isSubmitted}
-                                                className={cn(
-                                                    'h-11 w-full rounded-full',
-                                                    isSelected
-                                                        ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                                        : 'bg-white/5 text-white hover:bg-white/10',
-                                                )}
-                                                onClick={() => handleToggleSelection(image.id)}
-                                            >
-                                                <WandSparkles className="mr-2 h-4 w-4" />
-                                                {isSelected ? 'Отмечено для правки' : 'Нужно исправить'}
-                                            </Button>
-
-                                            {isSelected && (
-                                                <div className="space-y-2">
-                                                    <label className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                                        Что исправить в этой работе
-                                                    </label>
-                                                    <textarea
-                                                        value={form.data.comments[String(image.id)] ?? ''}
-                                                        disabled={isSubmitted}
-                                                        onChange={(event) =>
-                                                            form.setData('comments', {
-                                                                ...form.data.comments,
-                                                                [String(image.id)]: event.target.value,
-                                                            })
-                                                        }
-                                                        rows={4}
-                                                        placeholder="Например: сместить заголовок, заменить фото или усилить контраст."
-                                                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-orange-400/60 focus:ring-2 focus:ring-orange-400/20"
-                                                    />
-                                                    {page.props.errors?.[`comments.${image.id}`] && (
-                                                        <p className="text-sm text-rose-300">
-                                                            {page.props.errors[`comments.${image.id}`]}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </article>
+                                        <img
+                                            src={image.previewUrl ?? image.url}
+                                            alt={image.name}
+                                            loading="lazy"
+                                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                        />
+                                        {isSelected && (
+                                            <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
+                                                {t('client_review.card.revision_badge')}
+                                            </span>
+                                        )}
+                                        <span className="pointer-events-none absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                            <Expand className="h-3 w-3" />
+                                            {t('client_review.card.open')}
+                                        </span>
+                                    </button>
                                 );
                             })}
                         </div>
 
                         <aside className="space-y-4">
-                            <div className="rounded-[1.75rem] border border-white/6 bg-white/[0.03] p-5">
+                            <div className="rounded-[1.75rem] border border-white/6 bg-slate-900/45 p-5 backdrop-blur-sm">
                                 <h2 className="text-lg font-semibold text-white">
-                                    Как оставить правки
+                                    {t('client_review.sidebar.title')}
                                 </h2>
 
                                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                                    Выберите только нужные работы. Комментарий добавляется отдельно у каждой карточки, поэтому не нужно собирать все замечания в одном общем сообщении.
+                                    {t('client_review.sidebar.description')}
                                 </p>
 
                                 <div className="mt-5 space-y-3">
-                                    <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                            Выбрано для правки
+                                    <div className="rounded-2xl border border-white/6 bg-slate-950/45 px-4 py-3">
+                                        <p className="] text-xs text-zinc-500 uppercase">
+                                            {t('client_review.sidebar.selected_label')}
                                         </p>
                                         <p className="mt-2 text-2xl font-semibold text-white">
-                                            {selectedIds.size}
+                                            {selectedCount}
                                         </p>
                                     </div>
 
-                                    {selectedIds.size > 0 ? (
-                                        <div className="rounded-2xl border border-white/6 bg-black/20 p-4">
-                                            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                                Отмеченные работы
+                                    {selectedCount > 0 ? (
+                                        <div className="rounded-2xl border border-white/6 bg-slate-950/45 p-4">
+                                            <p className="] text-xs text-zinc-500 uppercase">
+                                                {t('client_review.sidebar.marked_label')}
                                             </p>
                                             <div className="mt-3 space-y-3">
                                                 {images
-                                                    .filter((image) => image.selectedForRevision)
+                                                    .filter(
+                                                        (image) =>
+                                                            image.selectedForRevision,
+                                                    )
                                                     .map((image) => (
                                                         <div
                                                             key={image.id}
-                                                            className="rounded-2xl border border-white/6 bg-white/[0.03] px-3 py-3"
+                                                            className="rounded-2xl border border-white/6 bg-slate-900/35 px-3 py-3"
                                                         >
                                                             <p className="truncate text-sm font-medium text-white">
                                                                 {image.name}
                                                             </p>
                                                             <p className="mt-1 text-sm text-zinc-400">
-                                                                {form.data.comments[String(image.id)]?.trim()
-                                                                    ? 'Комментарий добавлен'
-                                                                    : 'Комментарий можно добавить в карточке фото'}
+                                                                {form.data.comments[
+                                                                    String(
+                                                                        image.id,
+                                                                    )
+                                                                ]?.trim()
+                                                                    ? t('client_review.sidebar.comment_added')
+                                                                    : t('client_review.sidebar.comment_hint')}
                                                             </p>
                                                         </div>
                                                     ))}
@@ -281,7 +221,7 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                                         </div>
                                     ) : (
                                         <div className="rounded-2xl border border-dashed border-white/10 px-4 py-4 text-sm leading-6 text-zinc-500">
-                                            Если правок нет, просто отправьте результат без отмеченных работ.
+                                            {t('client_review.sidebar.empty_hint')}
                                         </div>
                                     )}
                                 </div>
@@ -289,11 +229,17 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                                 <Button
                                     type="button"
                                     disabled={form.processing || isSubmitted}
-                                    className="mt-4 h-11 w-full rounded-full bg-orange-500 text-white hover:bg-orange-600 disabled:bg-white/8 disabled:text-zinc-500"
+                                    className="mt-4 h-11 w-full rounded-full bg-emerald-500 text-white hover:bg-emerald-600 disabled:bg-white/8 disabled:text-zinc-500"
                                     onClick={handleSubmit}
                                 >
                                     <Send className="mr-2 h-4 w-4" />
-                                    {isSubmitted ? 'Замечания отправлены' : 'Отправить замечания'}
+                                    {isSubmitted
+                                        ? selectedCount > 0
+                                            ? t('client_review.button.sent')
+                                            : t('client_review.button.confirmed')
+                                        : selectedCount > 0
+                                          ? t('client_review.button.send_comments')
+                                          : t('client_review.button.confirm')}
                                 </Button>
                             </div>
                         </aside>
@@ -311,24 +257,26 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
             >
                 <DialogContent
                     showCloseButton
-                    className="max-h-[94vh] max-w-[min(96vw,1500px)] gap-4 overflow-y-auto border border-white/10 bg-[#050505] p-4 text-white sm:p-5"
+                    className="max-h-[94vh] max-w-[min(96vw,1500px)] gap-4 overflow-y-auto border border-white/10 bg-slate-950/95 p-4 text-white backdrop-blur-sm sm:p-5"
                 >
                     {activeImage && (
                         <>
                             <div className="flex items-start justify-between gap-4 pr-10">
                                 <div className="space-y-1">
                                     <DialogTitle className="text-base text-white sm:text-lg">
-                                        Просмотр готовой работы
+                                        {t('client_review.modal.title')}
                                     </DialogTitle>
                                     <DialogDescription className="text-zinc-400">
-                                        Кадр {activeImageIndex + 1} из {images.length}. Откройте работу крупно и при необходимости отметьте её для доработки.
+                                        {t('client_review.modal.description')
+                                            .replace(':current', String(activeImageIndex + 1))
+                                            .replace(':total', String(images.length))}
                                     </DialogDescription>
                                 </div>
                             </div>
 
                             <div className="relative flex min-h-[420px] items-center justify-center overflow-hidden rounded-[1.5rem] border border-white/8 bg-black p-4 sm:p-6">
                                 <img
-                                    src={activeImage.url}
+                                    src={activeImage.previewUrl ?? activeImage.url}
                                     alt={activeImage.name}
                                     className="h-auto max-h-[72vh] w-auto max-w-full rounded-xl object-contain"
                                 />
@@ -338,11 +286,17 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                                         type="button"
                                         size="icon"
                                         variant="outline"
-                                        className="absolute left-3 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/70 text-white hover:bg-black/85 sm:left-4"
-                                        onClick={() => setActiveImageId(images[activeImageIndex - 1].id)}
+                                        className="absolute top-1/2 left-3 z-10 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/70 text-white hover:bg-black/85 sm:left-4"
+                                        onClick={() =>
+                                            setActiveImageId(
+                                                images[activeImageIndex - 1].id,
+                                            )
+                                        }
                                     >
                                         <ChevronLeft className="h-5 w-5" />
-                                        <span className="sr-only">Предыдущая работа</span>
+                                        <span className="sr-only">
+                                            {t('client_review.modal.prev')}
+                                        </span>
                                     </Button>
                                 )}
 
@@ -351,11 +305,17 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                                         type="button"
                                         size="icon"
                                         variant="outline"
-                                        className="absolute right-3 top-1/2 z-10 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/70 text-white hover:bg-black/85 sm:right-4"
-                                        onClick={() => setActiveImageId(images[activeImageIndex + 1].id)}
+                                        className="absolute top-1/2 right-3 z-10 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/70 text-white hover:bg-black/85 sm:right-4"
+                                        onClick={() =>
+                                            setActiveImageId(
+                                                images[activeImageIndex + 1].id,
+                                            )
+                                        }
                                     >
                                         <ChevronRight className="h-5 w-5" />
-                                        <span className="sr-only">Следующая работа</span>
+                                        <span className="sr-only">
+                                            {t('client_review.modal.next')}
+                                        </span>
                                     </Button>
                                 )}
                             </div>
@@ -363,8 +323,8 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="text-sm text-zinc-400">
                                     {selectedIds.has(activeImage.id)
-                                        ? 'Эта работа уже отмечена для доработки.'
-                                        : 'Если требуется изменение, отметьте эту работу для правки.'}
+                                        ? t('client_review.modal.already_marked')
+                                        : t('client_review.modal.needs_fix_hint')}
                                 </div>
 
                                 <Button
@@ -373,37 +333,52 @@ export default function ClientMontageReviewShow({ project, images, status }: Pro
                                     className={cn(
                                         'h-11 rounded-full px-5',
                                         selectedIds.has(activeImage.id)
-                                            ? 'bg-orange-500 text-white hover:bg-orange-600'
+                                            ? 'bg-emerald-500 text-white hover:bg-emerald-600'
                                             : 'bg-white/5 text-white hover:bg-white/10',
                                     )}
-                                    onClick={() => handleToggleSelection(activeImage.id)}
+                                    onClick={() =>
+                                        handleToggleSelection(activeImage.id)
+                                    }
                                 >
                                     <WandSparkles className="mr-2 h-4 w-4" />
-                                    {selectedIds.has(activeImage.id) ? 'Отмечено для правки' : 'Нужно исправить'}
+                                    {selectedIds.has(activeImage.id)
+                                        ? t('client_review.button.marked')
+                                        : t('client_review.button.need_fix')}
                                 </Button>
                             </div>
 
                             {selectedIds.has(activeImage.id) && (
                                 <div className="space-y-2">
-                                    <label className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                        Комментарий к этой работе
+                                    <label className="] text-xs text-zinc-500 uppercase">
+                                        {t('client_review.modal.comment_label')}
                                     </label>
                                     <textarea
-                                        value={form.data.comments[String(activeImage.id)] ?? ''}
+                                        value={
+                                            form.data.comments[
+                                                String(activeImage.id)
+                                            ] ?? ''
+                                        }
                                         disabled={isSubmitted}
                                         onChange={(event) =>
                                             form.setData('comments', {
                                                 ...form.data.comments,
-                                                [String(activeImage.id)]: event.target.value,
+                                                [String(activeImage.id)]:
+                                                    event.target.value,
                                             })
                                         }
                                         rows={4}
-                                        placeholder="Например: сместить текст, заменить фото или усилить контраст."
-                                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-orange-400/60 focus:ring-2 focus:ring-orange-400/20"
+                                        placeholder={t('client_review.modal.comment_placeholder')}
+                                        className="w-full rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-white transition outline-none placeholder:text-zinc-500 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/20"
                                     />
-                                    {page.props.errors?.[`comments.${activeImage.id}`] && (
+                                    {page.props.errors?.[
+                                        `comments.${activeImage.id}`
+                                    ] && (
                                         <p className="text-sm text-rose-300">
-                                            {page.props.errors[`comments.${activeImage.id}`]}
+                                            {
+                                                page.props.errors[
+                                                    `comments.${activeImage.id}`
+                                                ]
+                                            }
                                         </p>
                                     )}
                                 </div>
@@ -442,36 +417,4 @@ function hasSameComments(
     }
 
     return nextKeys.every((key) => currentComments[key] === nextComments[key]);
-}
-
-function InfoCard({
-    label,
-    value,
-    hint,
-}: {
-    label: string;
-    value: string;
-    hint: string;
-}) {
-    return (
-        <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                {label}
-            </p>
-            <p className="mt-2 text-lg font-semibold text-white">{value}</p>
-            <p className="mt-1 text-sm text-zinc-400">{hint}</p>
-        </div>
-    );
-}
-
-function formatWorkCount(count: number): string {
-    if (count % 10 === 1 && count % 100 !== 11) {
-        return 'работа отмечена';
-    }
-
-    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
-        return 'работы отмечены';
-    }
-
-    return 'работ отмечено';
 }

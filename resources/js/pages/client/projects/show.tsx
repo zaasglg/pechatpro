@@ -1,32 +1,39 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Eye, Heart, ImageIcon, Quote, Send, UserRound } from 'lucide-react';
+import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
-    CheckCircle2,
-    ChevronLeft,
-    ChevronRight,
-    Expand,
-    Heart,
-    Images,
-    Send,
-} from 'lucide-react';
-import { useState } from 'react';
-import { submitSelection, toggleSelection } from '@/actions/App/Http/Controllers/ProjectClientSelectionController';
-import { Badge } from '@/components/ui/badge';
+    submitSelection,
+    toggleImageSelection,
+} from '@/actions/App/Http/Controllers/ProjectClientSelectionController';
+import AppToaster from '@/components/app-toaster';
+import InputError from '@/components/input-error';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { useTranslations } from '@/hooks/use-translations';
+import {
+    getClientSelectionDeadlineState,
+    isClientSelectionDeadlineExpired,
+} from '@/lib/client-selection-deadline';
 import { cn } from '@/lib/utils';
-
-type Slot = {
-    id: number;
-    name: string;
-    maxLikes: number;
-    selectedImageIds: number[];
-};
 
 type ImageItem = {
     id: number;
     name: string;
     url: string;
+    previewUrl: string | null;
+    mimeType: string | null;
     sizeBytes: number;
+    isTaken: boolean;
+    isReserved: boolean;
+    isSelected: boolean;
 };
 
 type Props = {
@@ -35,390 +42,489 @@ type Props = {
         name: string;
         className: string;
         token: string;
-        clientSelectionSubmittedAt: string | null;
+        portraitCount: number;
+        studentCount: number;
+        submittedStudentsCount: number;
+        remainingStudentsCount: number;
+        clientSelectionDeadlineAt: string | null;
+        clientSelectionCompletedAt: string | null;
     };
-    slots: Slot[];
+    selection: {
+        selectedImageIds: number[];
+    };
     images: ImageItem[];
-    status?: string | null;
 };
 
-export default function ClientProjectShow({ project, slots, images, status }: Props) {
+type ClientSelectionForm = {
+    first_name: string;
+    last_name: string;
+    student_quote: string;
+    selected_image_ids: number[];
+};
+
+type ScreenStep = 'details' | 'photos';
+
+export default function ClientProjectShow({
+    project,
+    selection,
+    images,
+}: Props) {
+    const { t } = useTranslations();
     const page = usePage<{ errors?: Record<string, string> }>();
-    const [activeSlotId, setActiveSlotId] = useState<number | null>(
-        slots[0]?.id ?? null,
+    const [step, setStep] = useState<ScreenStep>(
+        selection.selectedImageIds.length > 0 ? 'photos' : 'details',
     );
-    const [activeImageId, setActiveImageId] = useState<number | null>(null);
+    const [isSelectionSyncing, setIsSelectionSyncing] = useState(false);
+    const [previewImageId, setPreviewImageId] = useState<number | null>(null);
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    const form = useForm<ClientSelectionForm>({
+        first_name: '',
+        last_name: '',
+        student_quote: '',
+        selected_image_ids: selection.selectedImageIds,
+    });
 
-    const hasSlots = slots.length > 0;
-    const isSubmitted = project.clientSelectionSubmittedAt !== null;
-    const activeSlot = slots.find((slot) => slot.id === activeSlotId) ?? slots[0];
-    const selectedImageIds = new Set(activeSlot?.selectedImageIds ?? []);
-    const allSlotsCompleted = hasSlots && slots.every((slot) => slot.selectedImageIds.length === slot.maxLikes);
-    const completedSlotsCount = slots.filter((slot) => slot.selectedImageIds.length === slot.maxLikes).length;
-    const activeSlotIsFull = activeSlot !== undefined && activeSlot.selectedImageIds.length >= activeSlot.maxLikes;
-    const activeImageIndex = images.findIndex((image) => image.id === activeImageId);
-    const activeImage = activeImageIndex >= 0 ? images[activeImageIndex] : null;
+    const selectedIds = new Set(form.data.selected_image_ids);
+    const imageMap = useMemo(
+        () => new Map(images.map((image) => [image.id, image])),
+        [images],
+    );
+    const selectedCount = form.data.selected_image_ids.length;
+    const isLimitReached = project.remainingStudentsCount <= 0;
+    const isDeadlineExpired =
+        !isLimitReached &&
+        isClientSelectionDeadlineExpired(project.clientSelectionDeadlineAt);
+    const isClosed = isLimitReached || isDeadlineExpired;
+    const canSubmit =
+        !isClosed && selectedCount === project.portraitCount && images.length > 0;
+    const selectedImagesError =
+        form.errors.selected_image_ids ?? page.props.errors?.selected_image_ids;
+    const submissionError = page.props.errors?.submission;
+    const deadlineState = getClientSelectionDeadlineState(
+        project.clientSelectionDeadlineAt,
+        project.clientSelectionCompletedAt,
+        nowMs,
+    );
+    const previewImage =
+        previewImageId !== null ? imageMap.get(previewImageId) ?? null : null;
 
-    const handleToggleSelection = (imageId: number) => {
-        if (!activeSlot) {
+    useEffect(() => {
+        if (sameIds(form.data.selected_image_ids, selection.selectedImageIds)) {
             return;
         }
 
+        form.setData('selected_image_ids', selection.selectedImageIds);
+    }, [form, form.data.selected_image_ids, selection.selectedImageIds]);
+
+    useToastMessage(selectedImagesError, 'error');
+    useToastMessage(submissionError, 'error');
+
+    useEffect(() => {
+        if (step !== 'photos' || !project.clientSelectionDeadlineAt) {
+            return;
+        }
+
+        const intervalId = window.setInterval(() => {
+            startTransition(() => {
+                setNowMs(Date.now());
+            });
+        }, 1000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [project.clientSelectionDeadlineAt, step]);
+
+    const syncAvailability = useEffectEvent(() => {
+        if (document.visibilityState !== 'visible' || isClosed || isSelectionSyncing) {
+            return;
+        }
+
+        router.reload({
+            only: ['project', 'selection', 'images'],
+        });
+    });
+
+    useEffect(() => {
+        if (step !== 'photos' || isClosed) {
+            return;
+        }
+
+        const intervalId = window.setInterval(() => {
+            syncAvailability();
+        }, 4000);
+
+        return () => {
+            window.clearInterval(intervalId);
+        };
+    }, [isClosed, isSelectionSyncing, step]);
+
+    const openPhotoSelection = () => {
+        let hasError = false;
+
+        if (form.data.last_name.trim().length === 0) {
+            form.setError('last_name', t('client_selection.error.last_name'));
+            hasError = true;
+        }
+
+        if (form.data.first_name.trim().length === 0) {
+            form.setError('first_name', t('client_selection.error.first_name'));
+            hasError = true;
+        }
+
+        if (form.data.student_quote.trim().length === 0) {
+            form.setError('student_quote', t('client_selection.error.quote'));
+            hasError = true;
+        }
+
+        if (hasError) {
+            return;
+        }
+
+        setStep('photos');
+    };
+
+    const toggleImage = (image: ImageItem) => {
+        if (
+            isClosed ||
+            isSelectionSyncing ||
+            image.isTaken ||
+            image.isReserved
+        ) {
+            return;
+        }
+
+        const nextSelectedImageIds = selectedIds.has(image.id)
+            ? form.data.selected_image_ids.filter(
+                  (selectedImageId) => selectedImageId !== image.id,
+              )
+            : [...form.data.selected_image_ids, image.id];
+
+        if (!selectedIds.has(image.id) && selectedCount >= project.portraitCount) {
+            form.setError(
+                'selected_image_ids',
+                t('client_selection.error.only_n_portraits')
+                    .replace(':count', String(project.portraitCount))
+                    .replace(':word', formatPortraitWord(project.portraitCount, t)),
+            );
+
+            return;
+        }
+
+        form.setData('selected_image_ids', nextSelectedImageIds);
+        form.clearErrors('selected_image_ids');
+        setIsSelectionSyncing(true);
+
         router.post(
-            toggleSelection.url(project.token),
-            {
-                slot_id: activeSlot.id,
-                source_image_id: imageId,
-            },
+            toggleImageSelection.url(project.token),
+            { image_id: image.id },
             {
                 preserveScroll: true,
                 preserveState: true,
+                onFinish: () => {
+                    setIsSelectionSyncing(false);
+                },
             },
         );
     };
 
-    const handleSubmit = () => {
-        router.post(
-            submitSelection.url(project.token),
-            {},
-            {
-                preserveScroll: true,
-            },
-        );
+    const submitForm = () => {
+        if (isClosed) {
+            return;
+        }
+
+        if (selectedCount !== project.portraitCount) {
+            form.setError(
+                'selected_image_ids',
+                t('client_selection.error.exact_n_portraits')
+                    .replace(':count', String(project.portraitCount))
+                    .replace(':word', formatPortraitWord(project.portraitCount, t)),
+            );
+
+            return;
+        }
+
+        form.transform((data) => ({
+            ...data,
+            first_name: data.first_name.trim(),
+            last_name: data.last_name.trim(),
+            student_quote: data.student_quote.trim(),
+        }));
+
+        form.post(submitSelection.url(project.token), {
+            preserveScroll: true,
+        });
     };
 
     return (
         <>
-            <Head title={`Выбор фото | ${project.name}`} />
+            <Head title={`${t('client_selection.meta_title')} | ${project.name}`} />
+            <AppToaster />
 
-            <div className="min-h-screen bg-[#050505] px-4 py-5 text-white md:px-8 md:py-8">
-                <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5">
-                    <section className="rounded-[2rem] border border-white/6 bg-white/[0.03] p-5 md:p-6">
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="space-y-4">
-                                <Badge
-                                    variant="outline"
-                                    className="border-orange-500/20 bg-orange-500/10 text-orange-200"
+            <div className="relative min-h-screen bg-[#08101d] px-4 py-5 text-white md:px-6 md:py-6">
+                <div className="absolute top-4 right-4 z-20 md:top-6 md:right-6">
+                    <LanguageSwitcher />
+                </div>
+                <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-6xl items-center justify-center">
+                    {step === 'details' ? (
+                        <section className="w-full max-w-2xl rounded-[2rem] border border-white/8 bg-white/[0.04] p-6 shadow-[0_30px_100px_rgba(2,6,23,0.45)] backdrop-blur-xl md:p-8">
+                            <div className="space-y-5">
+                                <FieldBlock
+                                    icon={UserRound}
+                                    value={form.data.last_name}
+                                    placeholder={t('client_selection.placeholder.last_name')}
+                                    error={form.errors.last_name}
+                                    disabled={isClosed || form.processing}
+                                    onChange={(value) => {
+                                        form.setData('last_name', value);
+                                        form.clearErrors('last_name');
+                                    }}
+                                />
+
+                                <FieldBlock
+                                    icon={UserRound}
+                                    value={form.data.first_name}
+                                    placeholder={t('client_selection.placeholder.first_name')}
+                                    error={form.errors.first_name}
+                                    disabled={isClosed || form.processing}
+                                    onChange={(value) => {
+                                        form.setData('first_name', value);
+                                        form.clearErrors('first_name');
+                                    }}
+                                />
+
+                                <QuoteBlock
+                                    value={form.data.student_quote}
+                                    placeholder={t('client_selection.placeholder.quote')}
+                                    error={form.errors.student_quote}
+                                    disabled={isClosed || form.processing}
+                                    onChange={(value) => {
+                                        form.setData('student_quote', value);
+                                        form.clearErrors('student_quote');
+                                    }}
+                                />
+
+                                <Button
+                                    type="button"
+                                    disabled={isClosed || form.processing}
+                                    onClick={openPhotoSelection}
+                                    className="h-13 w-full rounded-full bg-white text-slate-950 hover:bg-slate-100 disabled:bg-white/10 disabled:text-slate-500"
                                 >
-                                    {project.className}
-                                </Badge>
+                                    {t('client_selection.button.choose_photos')}
+                                </Button>
+                            </div>
+                        </section>
+                    ) : (
+                        <section className="w-full space-y-5">
+                            <div className="rounded-[1.45rem] border border-white/8 bg-white/[0.04] p-3.5 backdrop-blur-xl md:rounded-[1.6rem] md:p-4 md:px-5">
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={form.processing}
+                                    onClick={() => setStep('details')}
+                                    className="h-9 self-start rounded-full px-3 text-slate-300 hover:bg-white/8 hover:text-white"
+                                >
+                                    <ArrowLeft className="mr-1 h-4 w-4" />
+                                    {t('client_selection.button.back')}
+                                </Button>
 
-                                <div className="space-y-2">
-                                    <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">
-                                        {project.name}
-                                    </h1>
-                                    <p className="max-w-3xl text-sm leading-6 text-zinc-400">
-                                        Выберите лучшие фотографии для каждого блока. Когда все блоки будут заполнены, отправьте выбор кнопкой «Готово».
-                                    </p>
+                                <h1 className="px-1 text-left text-xl font-medium tracking-tight text-white sm:text-2xl md:px-0 md:text-center md:text-xl">
+                                    {project.name}
+                                </h1>
+
+                                <div className="grid w-full grid-cols-[max-content_minmax(0,1fr)] items-center gap-2.5 md:flex md:w-auto md:self-auto">
+                                    <TimerBadge
+                                        value={formatTimerLabel(deadlineState, t)}
+                                        isExpired={deadlineState?.state === 'expired'}
+                                    />
+
+                                    <Button
+                                        type="button"
+                                        disabled={form.processing || !canSubmit}
+                                        onClick={submitForm}
+                                        className="h-11 w-full rounded-full bg-emerald-500 px-5 text-white hover:bg-emerald-400 disabled:bg-white/10 disabled:text-slate-500 md:w-auto"
+                                    >
+                                        <Send className="mr-2 h-4 w-4" />
+                                        {form.processing
+                                            ? t('client_selection.button.submitting')
+                                            : t('client_selection.button.submit')}
+                                    </Button>
+                                </div>
                                 </div>
                             </div>
 
-                            <Button
-                                type="button"
-                                disabled={!allSlotsCompleted || isSubmitted}
-                                className="h-12 rounded-full bg-orange-500 px-6 text-base text-white hover:bg-orange-600 disabled:bg-white/8 disabled:text-zinc-500"
-                                onClick={handleSubmit}
-                            >
-                                <Send className="mr-2 h-4 w-4" />
-                                {isSubmitted ? 'Выбор отправлен' : 'Готово'}
-                            </Button>
-                        </div>
-
-                        <div className="mt-6 grid gap-3 md:grid-cols-3">
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                    Прогресс
-                                </p>
-                                <p className="mt-2 text-lg font-semibold text-white">
-                                    {completedSlotsCount} из {slots.length}
-                                </p>
-                                <p className="mt-1 text-sm text-zinc-400">
-                                    {formatSlotCount(slots.length)}
-                                </p>
-                            </div>
-
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                    Активный блок
-                                </p>
-                                <p className="mt-2 text-lg font-semibold text-white">
-                                    {activeSlot?.name ?? 'Не выбран'}
-                                </p>
-                                <p className="mt-1 text-sm text-zinc-400">
-                                    {activeSlot
-                                        ? `Можно выбрать ${activeSlot.maxLikes} ${formatPhotoCount(activeSlot.maxLikes)}`
-                                        : 'Сначала выберите блок'}
-                                </p>
-                            </div>
-
-                            <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3">
-                                <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                                    Фото в галерее
-                                </p>
-                                <p className="mt-2 text-lg font-semibold text-white">
-                                    {images.length}
-                                </p>
-                                <p className="mt-1 text-sm text-zinc-400">
-                                    Нажмите на кадр, чтобы открыть его крупно
-                                </p>
-                            </div>
-                        </div>
-                    </section>
-
-                    {status && (
-                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                            {status}
-                        </div>
-                    )}
-
-                    {page.props.errors?.source_image_id && (
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-                            {page.props.errors.source_image_id}
-                        </div>
-                    )}
-
-                    {page.props.errors?.selection && (
-                        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
-                            {page.props.errors.selection}
-                        </div>
-                    )}
-
-                    <section className="space-y-5">
-                        <div className="rounded-[2rem] border border-white/6 bg-white/[0.03] p-4 md:p-5">
-                            <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-2">
-                                    <Images className="h-4 w-4 text-orange-400" />
-                                    <h2 className="text-base font-semibold text-white">
-                                        Блоки выбора
-                                    </h2>
-                                </div>
-
-                                <div className="flex flex-wrap gap-3">
-                                    {slots.map((slot) => {
-                                        const isActive = slot.id === activeSlot?.id;
-                                        const isCompleted = slot.selectedImageIds.length === slot.maxLikes;
+                            <div className="grid grid-cols-3 gap-3 md:grid-cols-4 xl:grid-cols-4">
+                                {Array.from({ length: project.portraitCount }).map(
+                                    (_, index) => {
+                                        const imageId = form.data.selected_image_ids[index];
+                                        const image = imageId
+                                            ? imageMap.get(imageId) ?? null
+                                            : null;
 
                                         return (
-                                            <button
-                                                key={slot.id}
-                                                type="button"
-                                                className={cn(
-                                                    'min-w-[220px] flex-1 rounded-2xl border px-4 py-4 text-left transition md:flex-none md:basis-[240px]',
-                                                    isActive
-                                                        ? 'border-orange-500/30 bg-orange-500/10'
-                                                        : 'border-white/6 bg-black/20 hover:border-white/12 hover:bg-white/[0.03]',
-                                                )}
-                                                onClick={() => setActiveSlotId(slot.id)}
-                                            >
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="space-y-2">
-                                                        <p className="text-lg font-medium text-white">
-                                                            {slot.name}
-                                                        </p>
-                                                        <p className="text-sm text-zinc-400">
-                                                            Выбрано {slot.selectedImageIds.length} из {slot.maxLikes}
-                                                        </p>
-                                                    </div>
+                                            <SelectionSlot
+                                                key={`slot-${index + 1}`}
+                                                index={index + 1}
+                                                label={t('client_selection.slot.portrait').replace(':index', String(index + 1))}
+                                                previewAriaLabel={t('client_selection.preview.open_aria')}
+                                                image={image}
+                                                onPreview={(previewId) =>
+                                                    setPreviewImageId(previewId)
+                                                }
+                                            />
+                                        );
+                                    },
+                                )}
+                            </div>
 
-                                                    {isCompleted ? (
-                                                        <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-orange-400" />
-                                                    ) : isActive ? (
-                                                        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-orange-400" />
-                                                    ) : null}
+                            {images.length > 0 ? (
+                                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                                    {images.map((image) => {
+                                        const isSelected = selectedIds.has(image.id);
+                                        const isDisabled =
+                                            isClosed ||
+                                            isSelectionSyncing ||
+                                            image.isTaken ||
+                                            image.isReserved;
+
+                                        return (
+                                            <div
+                                                key={image.id}
+                                                role="button"
+                                                tabIndex={isDisabled ? -1 : 0}
+                                                aria-disabled={isDisabled}
+                                                onClick={() => {
+                                                    if (!isDisabled) {
+                                                        toggleImage(image);
+                                                    }
+                                                }}
+                                                onKeyDown={(event) => {
+                                                    if (isDisabled) {
+                                                        return;
+                                                    }
+
+                                                    if (
+                                                        event.key === 'Enter' ||
+                                                        event.key === ' '
+                                                    ) {
+                                                        event.preventDefault();
+                                                        toggleImage(image);
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    'group relative overflow-hidden rounded-[1.4rem] border transition duration-300',
+                                                    isSelected
+                                                        ? 'border-rose-400/60 shadow-[0_18px_55px_rgba(244,63,94,0.28)]'
+                                                        : 'border-white/8 hover:-translate-y-0.5 hover:border-white/20',
+                                                    isDisabled &&
+                                                        !isSelected &&
+                                                        'cursor-not-allowed opacity-50',
+                                                    !isDisabled &&
+                                                        'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
+                                                )}
+                                            >
+                                                <div className="relative aspect-[4/5] bg-black/30">
+                                                    {image.previewUrl || image.url ? (
+                                                        <img
+                                                            src={image.previewUrl ?? image.url}
+                                                            alt={image.name}
+                                                            className={cn(
+                                                                'h-full w-full object-cover transition duration-500',
+                                                                isSelected
+                                                                    ? 'scale-[1.05]'
+                                                                    : 'group-hover:scale-[1.03]',
+                                                            )}
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-full w-full items-center justify-center text-slate-600">
+                                                            <ImageIcon className="h-8 w-8" />
+                                                        </div>
+                                                    )}
+
+                                                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={(event) => {
+                                                            event.preventDefault();
+                                                            event.stopPropagation();
+                                                            setPreviewImageId(image.id);
+                                                        }}
+                                                        className="absolute top-2 left-2 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white backdrop-blur-sm transition hover:bg-black/55"
+                                                        aria-label={t('client_selection.preview.open_aria').replace(':name', image.name)}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </button>
+
+                                                    <span
+                                                        className={cn(
+                                                            'absolute top-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-full border transition duration-300',
+                                                            isSelected
+                                                                ? 'border-rose-300/30 bg-rose-500 text-white'
+                                                                : 'border-white/15 bg-black/35 text-white backdrop-blur-sm',
+                                                        )}
+                                                    >
+                                                        <Heart
+                                                            className={cn(
+                                                                'h-4 w-4',
+                                                                isSelected && 'fill-current',
+                                                            )}
+                                                        />
+                                                    </span>
+
+                                                    {image.isReserved && !isSelected && (
+                                                        <PhotoBadge>{t('client_selection.badge.reserved')}</PhotoBadge>
+                                                    )}
+
+                                                    {image.isTaken && !isSelected && (
+                                                        <PhotoBadge tone="success">
+                                                            {t('client_selection.badge.taken')}
+                                                        </PhotoBadge>
+                                                    )}
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
-
-                                <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3 text-sm text-zinc-300">
-                                    {isSubmitted ? (
-                                        <>
-                                            Выбор отправлен модератору. Лайки больше нельзя менять.
-                                        </>
-                                    ) : activeSlot ? (
-                                        <>
-                                            Сейчас открыт блок{' '}
-                                            <span className="font-medium text-white">
-                                                {activeSlot.name}
-                                            </span>
-                                            . Выберите до{' '}
-                                            <span className="font-medium text-white">
-                                                {activeSlot.maxLikes} {formatPhotoCount(activeSlot.maxLikes)}
-                                            </span>
-                                            .
-                                        </>
-                                    ) : (
-                                        'Сначала выберите блок, для которого хотите отметить фотографии.'
-                                    )}
+                            ) : (
+                                <div className="rounded-[1.8rem] border border-dashed border-white/10 px-5 py-16 text-center text-sm text-slate-500">
+                                    {t('client_selection.empty')}
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-6">
-                            {images.map((image) => {
-                                const isSelected = selectedImageIds.has(image.id);
-                                const isDisabled = !isSelected && activeSlotIsFull;
-
-                                return (
-                                    <article
-                                        key={image.id}
-                                        className={cn(
-                                            'group overflow-hidden rounded-[1.75rem] border bg-white/[0.03] transition',
-                                            isSelected
-                                                ? 'border-orange-500/30 shadow-[0_0_0_1px_rgba(249,115,22,0.14)]'
-                                                : 'border-white/6 hover:border-white/12',
-                                        )}
-                                    >
-                                        <div className="relative aspect-[4/4.8] overflow-hidden bg-black/40">
-                                            <button
-                                                type="button"
-                                                className="h-full w-full text-left"
-                                                onClick={() => setActiveImageId(image.id)}
-                                            >
-                                                <img
-                                                    src={image.url}
-                                                    alt={image.name}
-                                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                                                />
-                                                <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-                                                    {isSelected && (
-                                                        <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-medium text-white shadow-lg shadow-orange-500/20">
-                                                            Выбрано
-                                                        </span>
-                                                    )}
-                                                    <span className="ml-auto inline-flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs text-white opacity-0 backdrop-blur-sm transition group-hover:opacity-100">
-                                                        <Expand className="h-3.5 w-3.5" />
-                                                        Открыть
-                                                    </span>
-                                                </div>
-                                                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
-                                            </button>
-                                        </div>
-
-                                        <div className="p-3">
-                                            <Button
-                                                type="button"
-                                                disabled={!activeSlot || isDisabled || isSubmitted}
-                                                className={cn(
-                                                    'h-11 w-full rounded-full',
-                                                    isSelected
-                                                        ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                                        : 'bg-white/5 text-white hover:bg-white/10',
-                                                )}
-                                                onClick={() => handleToggleSelection(image.id)}
-                                            >
-                                                <Heart
-                                                    className={cn(
-                                                        'mr-2 h-4 w-4',
-                                                        isSelected && 'fill-current',
-                                                    )}
-                                                />
-                                                {isSelected ? 'Выбрано' : 'Поставить лайк'}
-                                            </Button>
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    </section>
+                            )}
+                        </section>
+                    )}
                 </div>
             </div>
 
             <Dialog
-                open={activeImage !== null}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setActiveImageId(null);
-                    }
-                }}
+                open={previewImage !== null}
+                onOpenChange={(open) => !open && setPreviewImageId(null)}
             >
                 <DialogContent
+                    className="max-w-[calc(100vw-1.5rem)] border-white/10 bg-slate-950/95 p-3 text-white sm:max-w-4xl"
                     showCloseButton
-                    className="max-h-[94vh] max-w-[min(96vw,1500px)] gap-4 overflow-hidden border border-white/10 bg-[#050505] p-4 text-white sm:p-5"
                 >
-                    {activeImage && (
-                        <>
-                            <div className="flex items-start justify-between gap-4 pr-10">
-                                <div className="space-y-1">
-                                    <DialogTitle className="text-base text-white sm:text-lg">
-                                        Просмотр фотографии
-                                    </DialogTitle>
-                                    <DialogDescription className="text-zinc-400">
-                                        Кадр {activeImageIndex + 1} из {images.length}. Откройте фото крупно и затем поставьте лайк, если хотите выбрать его.
-                                    </DialogDescription>
-                                </div>
+                    {previewImage && (
+                        <div className="space-y-3">
+                            <div className="px-1">
+                                <DialogTitle className="truncate text-sm text-white sm:text-base">
+                                    {previewImage.name}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-400">
+                                    {t('client_selection.preview.description')}
+                                </DialogDescription>
                             </div>
 
-                            <div className="relative overflow-hidden rounded-[1.5rem] border border-white/8 bg-black">
+                            <div className="overflow-hidden rounded-[1.4rem] bg-black">
                                 <img
-                                    src={activeImage.url}
-                                    alt={activeImage.name}
-                                    className="max-h-[76vh] w-full object-contain"
+                                    src={previewImage.previewUrl ?? previewImage.url}
+                                    alt={previewImage.name}
+                                    className="max-h-[75vh] w-full object-contain"
                                 />
-
-                                {activeImageIndex > 0 && (
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        className="absolute left-4 top-1/2 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/60 text-white hover:bg-black/80"
-                                        onClick={() => setActiveImageId(images[activeImageIndex - 1].id)}
-                                    >
-                                        <ChevronLeft className="h-5 w-5" />
-                                        <span className="sr-only">Предыдущее фото</span>
-                                    </Button>
-                                )}
-
-                                {activeImageIndex < images.length - 1 && (
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="outline"
-                                        className="absolute right-4 top-1/2 h-11 w-11 -translate-y-1/2 rounded-full border-white/10 bg-black/60 text-white hover:bg-black/80"
-                                        onClick={() => setActiveImageId(images[activeImageIndex + 1].id)}
-                                    >
-                                        <ChevronRight className="h-5 w-5" />
-                                        <span className="sr-only">Следующее фото</span>
-                                    </Button>
-                                )}
                             </div>
-
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="text-sm text-zinc-400">
-                                    {activeSlot ? (
-                                        <>
-                                            Активный блок:{' '}
-                                            <span className="font-medium text-white">
-                                                {activeSlot.name}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        'Сначала выберите блок.'
-                                    )}
-                                </div>
-
-                                <Button
-                                    type="button"
-                                    disabled={!activeSlot || (!selectedImageIds.has(activeImage.id) && activeSlotIsFull) || isSubmitted}
-                                    className={cn(
-                                        'h-11 rounded-full px-5',
-                                        selectedImageIds.has(activeImage.id)
-                                            ? 'bg-orange-500 text-white hover:bg-orange-600'
-                                            : 'bg-white/5 text-white hover:bg-white/10',
-                                    )}
-                                    onClick={() => handleToggleSelection(activeImage.id)}
-                                >
-                                    <Heart
-                                        className={cn(
-                                            'mr-2 h-4 w-4',
-                                            selectedImageIds.has(activeImage.id) && 'fill-current',
-                                        )}
-                                    />
-                                    {selectedImageIds.has(activeImage.id) ? 'Выбрано' : 'Поставить лайк'}
-                                </Button>
-                            </div>
-                        </>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>
@@ -426,26 +532,235 @@ export default function ClientProjectShow({ project, slots, images, status }: Pr
     );
 }
 
-function formatSlotCount(count: number): string {
-    if (count % 10 === 1 && count % 100 !== 11) {
-        return 'блок заполнен';
-    }
-
-    if ([2, 3, 4].includes(count % 10) && ! [12, 13, 14].includes(count % 100)) {
-        return 'блока заполнены';
-    }
-
-    return 'блоков заполнено';
+function FieldBlock({
+    icon: Icon,
+    value,
+    placeholder,
+    error,
+    disabled,
+    onChange,
+}: {
+    icon: typeof UserRound;
+    value: string;
+    placeholder: string;
+    error?: string;
+    disabled: boolean;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <div className="space-y-2">
+            <div className="relative">
+                <Icon className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <Input
+                    value={value}
+                    disabled={disabled}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder={placeholder}
+                    className="h-14 rounded-[1.2rem] border border-white/10 bg-slate-950/60 pr-4 pl-11 text-base text-white placeholder:text-slate-500"
+                />
+            </div>
+            <InputError message={error} className="text-rose-200" />
+        </div>
+    );
 }
 
-function formatPhotoCount(count: number): string {
+function QuoteBlock({
+    value,
+    placeholder,
+    error,
+    disabled,
+    onChange,
+}: {
+    value: string;
+    placeholder: string;
+    error?: string;
+    disabled: boolean;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <div className="space-y-2">
+            <div className="relative">
+                <Quote className="pointer-events-none absolute top-4 left-4 h-4 w-4 text-slate-500" />
+                <textarea
+                    rows={5}
+                    value={value}
+                    disabled={disabled}
+                    onChange={(event) => onChange(event.target.value)}
+                    placeholder={placeholder}
+                    className="min-h-40 w-full resize-none rounded-[1.4rem] border border-white/10 bg-slate-950/60 px-11 py-4 text-base text-white outline-none transition placeholder:text-slate-500 focus:border-white/20 focus:ring-2 focus:ring-white/10"
+                />
+            </div>
+            <InputError message={error} className="text-rose-200" />
+        </div>
+    );
+}
+
+function TimerBadge({
+    value,
+    isExpired,
+}: {
+    value: string;
+    isExpired: boolean;
+}) {
+    return (
+        <div
+            className={cn(
+                'rounded-full border px-4 py-2 text-sm font-medium tabular-nums',
+                isExpired
+                    ? 'border-rose-400/20 bg-rose-500/10 text-rose-100'
+                    : 'border-white/10 bg-slate-950/60 text-white',
+            )}
+        >
+            {value}
+        </div>
+    );
+}
+
+function SelectionSlot({
+    index,
+    label,
+    previewAriaLabel,
+    image,
+    onPreview,
+}: {
+    index: number;
+    label: string;
+    previewAriaLabel: string;
+    image: ImageItem | null;
+    onPreview: (imageId: number) => void;
+}) {
+    return (
+        <div
+            className={cn(
+                'overflow-hidden rounded-[1.5rem] border bg-slate-950/55',
+                image ? 'border-white/12' : 'border-dashed border-white/10',
+            )}
+        >
+            {image ? (
+                <div className="relative aspect-[4/5]">
+                    <img
+                        src={image.previewUrl ?? image.url}
+                        alt={image.name}
+                        className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+                    <button
+                        type="button"
+                        onClick={() => onPreview(image.id)}
+                        className="absolute top-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white backdrop-blur-sm transition hover:bg-black/55"
+                        aria-label={previewAriaLabel.replace(':name', image.name)}
+                    >
+                        <Eye className="h-4 w-4" />
+                    </button>
+                    <div className="absolute top-3 left-3 rounded-full bg-black/45 px-3 py-1 text-xs text-white backdrop-blur-sm">
+                        {index}
+                    </div>
+                </div>
+            ) : (
+                <div className="flex aspect-[4/5] flex-col items-center justify-center gap-3 text-slate-500">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-white/10">
+                        <ImageIcon className="h-5 w-5" />
+                    </div>
+                    <span className="text-sm">{label}</span>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PhotoBadge({
+    tone = 'default',
+    children,
+}: {
+    tone?: 'default' | 'success';
+    children: string;
+}) {
+    return (
+        <span
+            className={cn(
+                'absolute top-2 left-2 rounded-full px-2.5 py-1 text-[11px] font-medium backdrop-blur-sm',
+                tone === 'success'
+                    ? 'bg-emerald-500/80 text-white'
+                    : 'bg-black/45 text-white',
+            )}
+        >
+            {children}
+        </span>
+    );
+}
+
+function formatTimerLabel(
+    deadlineState: ReturnType<typeof getClientSelectionDeadlineState>,
+    t: (key: string, fallback?: string) => string,
+): string {
+    if (!deadlineState) {
+        return t('client_selection.timer.none');
+    }
+
+    if (deadlineState.state === 'active' && deadlineState.remaining) {
+        return deadlineState.remaining;
+    }
+
+    if (deadlineState.state === 'submitted') {
+        return t('client_selection.timer.submitted');
+    }
+
+    if (deadlineState.state === 'expired') {
+        return t('client_selection.timer.expired');
+    }
+
+    return deadlineState.label;
+}
+
+function sameIds(currentIds: number[], nextIds: number[]): boolean {
+    if (currentIds.length !== nextIds.length) {
+        return false;
+    }
+
+    return currentIds.every((imageId, index) => imageId === nextIds[index]);
+}
+
+function useToastMessage(
+    message: string | null | undefined,
+    level: 'error' | 'success' | 'info' | 'warning' = 'info',
+) {
+    const lastMessageRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!message || message === lastMessageRef.current) {
+            return;
+        }
+
+        lastMessageRef.current = message;
+
+        switch (level) {
+            case 'error':
+                toast.error(message);
+                break;
+            case 'success':
+                toast.success(message);
+                break;
+            case 'warning':
+                toast.warning(message);
+                break;
+            default:
+                toast.info(message);
+                break;
+        }
+    }, [level, message]);
+}
+
+function formatPortraitWord(
+    count: number,
+    t: (key: string, fallback?: string) => string,
+): string {
     if (count % 10 === 1 && count % 100 !== 11) {
-        return 'фото';
+        return t('client_selection.portraits_word.one');
     }
 
-    if ([2, 3, 4].includes(count % 10) && ! [12, 13, 14].includes(count % 100)) {
-        return 'фото';
+    if ([2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100)) {
+        return t('client_selection.portraits_word.few');
     }
 
-    return 'фото';
+    return t('client_selection.portraits_word.many');
 }

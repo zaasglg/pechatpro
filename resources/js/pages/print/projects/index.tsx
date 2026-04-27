@@ -1,8 +1,9 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { CheckCircle2, ExternalLink, ImageIcon, Printer, UserRound } from 'lucide-react';
-import { index as printProjectIndex, show as showPrintProject } from '@/actions/App/Http/Controllers/PrintProjectController';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { ArrowRight } from 'lucide-react';
+import {
+    index as printProjectIndex,
+    show as showPrintProject,
+} from '@/actions/App/Http/Controllers/PrintProjectController';
 
 type ProjectListItem = {
     id: number;
@@ -32,93 +33,63 @@ export default function PrintProjectIndex({ projects, status }: Props) {
         <>
             <Head title="Проекты печати" />
 
-            <div className="flex w-full flex-col gap-6 p-4 md:p-8">
-                <div className="space-y-2">
-                    <h1 className="text-3xl font-semibold tracking-tight text-white">
+            <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
+                <div>
+                    <h1 className="text-xl font-medium text-white">
                         Проекты для печати
                     </h1>
-                    <p className="max-w-3xl text-sm leading-6 text-zinc-400">
-                        Здесь видны только проекты, назначенные вам на этап
-                        печати. После завершения отметьте проект как готовый,
-                        чтобы вернуть его модератору.
+                    <p className="mt-1 text-sm text-zinc-500">
+                        Проекты, назначенные вам на этап печати.
                     </p>
                 </div>
 
                 {status && (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                        {status}
-                    </div>
+                    <p className="text-sm text-emerald-400">{status}</p>
                 )}
 
-                <div className="grid gap-4 xl:grid-cols-2">
-                    {projects.map((project) => (
-                        <article
-                            key={project.id}
-                            className="rounded-[1.75rem] border border-white/6 bg-white/[0.03] p-5"
-                        >
-                            <div className="flex h-full flex-col gap-5">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Badge
-                                        variant="outline"
-                                        className="border-orange-500/20 bg-orange-500/10 text-orange-200"
-                                    >
-                                        {project.className}
-                                    </Badge>
-                                    <Badge
-                                        variant="outline"
-                                        className="border-white/10 bg-white/5 text-zinc-200"
-                                    >
-                                        {project.printingReadyAt ? 'Готово для модератора' : 'В печати'}
-                                    </Badge>
-                                </div>
+                {projects.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-zinc-600">
+                        Проектов для печати пока нет
+                    </p>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {projects.map((project) => {
+                            const done = project.printingReadyAt !== null;
 
-                                <div>
-                                    <h2 className="text-xl font-semibold text-white">
-                                        {project.name}
-                                    </h2>
-                                    <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-                                        <span className="inline-flex items-center gap-2">
-                                            <UserRound className="h-4 w-4 text-orange-400" />
-                                            {project.photographerName ?? 'Фотограф не указан'}
-                                        </span>
-                                        <span className="inline-flex items-center gap-2">
-                                            <ImageIcon className="h-4 w-4 text-orange-400" />
-                                            {project.readyWorksCount} файлов для печати
-                                        </span>
-                                        <span className="inline-flex items-center gap-2">
-                                            <Printer className="h-4 w-4 text-orange-400" />
-                                            {project.printingReadyAt ? 'Печать завершена' : 'Ожидает завершения'}
-                                        </span>
+                            return (
+                                <Link
+                                    key={project.id}
+                                    href={showPrintProject(project.id)}
+                                    prefetch
+                                    className="group flex flex-col gap-4 rounded-2xl border border-white/6 bg-slate-900/45 p-5 transition hover:border-white/12 hover:bg-slate-900/70"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-zinc-400">
+                                                {project.className}
+                                            </span>
+                                            <span className={`rounded-md px-2 py-0.5 text-xs ${done ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-zinc-400'}`}>
+                                                {done ? 'Готово' : 'В печати'}
+                                            </span>
+                                        </div>
+                                        <ArrowRight className="h-4 w-4 text-zinc-600 transition group-hover:text-zinc-400" />
                                     </div>
-                                </div>
 
-                                <div className="mt-auto flex justify-end">
-                                    <Button
-                                        asChild
-                                        className="bg-orange-500 text-white hover:bg-orange-600"
-                                    >
-                                        <Link href={showPrintProject(project.id)} prefetch>
-                                            <ExternalLink className="mr-2 h-4 w-4" />
-                                            Открыть проект
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </div>
-                        </article>
-                    ))}
-                </div>
+                                    <div>
+                                        <p className="font-medium text-white">
+                                            {project.name}
+                                        </p>
+                                        <p className="mt-1 text-xs text-zinc-500">
+                                            {project.photographerName ?? 'Фотограф не указан'}
+                                        </p>
+                                    </div>
 
-                {projects.length === 0 && (
-                    <div className="rounded-[1.75rem] border border-dashed border-white/10 bg-white/[0.02] px-6 py-10 text-center">
-                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-zinc-300">
-                            <CheckCircle2 className="h-6 w-6" />
-                        </div>
-                        <h2 className="mt-4 text-lg font-semibold text-white">
-                            Пока нет проектов для печати
-                        </h2>
-                        <p className="mt-2 text-sm text-zinc-500">
-                            Когда модератор назначит вам проект, он появится здесь.
-                        </p>
+                                    <p className="mt-auto text-xs text-zinc-600">
+                                        {project.readyWorksCount} файлов для печати
+                                    </p>
+                                </Link>
+                            );
+                        })}
                     </div>
                 )}
             </div>

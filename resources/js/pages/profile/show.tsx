@@ -1,8 +1,21 @@
 import { Head, useForm } from '@inertiajs/react';
-import { Calendar, Camera, Link2, Lock, MapPin, Phone, Upload, UserRound } from 'lucide-react';
+import {
+    Calendar,
+    Camera,
+    Link2,
+    Lock,
+    MapPin,
+    Phone,
+    Upload,
+    UserRound,
+} from 'lucide-react';
 import type { ChangeEvent, DragEvent, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { update as updateProfileInformation, updateAvatar, updatePassword as updateProfilePassword } from '@/actions/App/Http/Controllers/ProfileController';
+import {
+    update as updateProfileInformation,
+    updateAvatar,
+    updatePassword as updateProfilePassword,
+} from '@/actions/App/Http/Controllers/ProfileController';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -49,22 +62,25 @@ type ProfilePasswordForm = {
 export default function ProfileShow({
     cities,
     user,
+    stats,
     status,
 }: {
     cities: CityOption[];
     user: User;
+    stats: {
+        totalOrders: number;
+        activeOrders: number;
+        completed: number;
+    };
     status?: string | null;
 }) {
-    const stats = {
-        totalOrders: 142,
-        activeOrders: 12,
-        completed: 130,
-    };
 
     const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
     const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
     const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
-    const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+    const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(
+        null,
+    );
     const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
     const avatarPreviewUrlRef = useRef<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -168,7 +184,9 @@ export default function ProfileShow({
         selectAvatarFile(event.dataTransfer.files?.[0] ?? null);
     };
 
-    const handleAvatarDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const handleAvatarDropzoneKeyDown = (
+        event: KeyboardEvent<HTMLDivElement>,
+    ) => {
         if (event.key !== 'Enter' && event.key !== ' ') {
             return;
         }
@@ -230,11 +248,11 @@ export default function ProfileShow({
             <Head title={`Профиль | ${user.name}`} />
             <div className="flex w-full flex-col">
                 <div className="group relative h-[180px] w-full overflow-hidden border-b border-white/5 bg-gradient-to-r from-zinc-900 via-zinc-950 to-black sm:h-[220px]">
-                    <div className="absolute inset-0 bg-orange-500/5 mix-blend-overlay"></div>
+                    <div className="absolute inset-0 bg-emerald-500/5 mix-blend-overlay"></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent"></div>
                 </div>
 
-                <div className="relative mx-auto -mt-16 w-full max-w-6xl px-4 pb-12 sm:-mt-24 sm:px-6">
+                <div className="relative mx-auto -mt-16 w-full max-w-7xl px-4 pb-12 sm:-mt-24 sm:px-6">
                     <div className="mb-6 flex flex-col items-start gap-4">
                         <Dialog
                             open={isAvatarDialogOpen}
@@ -244,31 +262,30 @@ export default function ProfileShow({
                                 <DialogTrigger asChild>
                                     <button
                                         type="button"
-                                        className="group relative block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                                        className="group relative block rounded-full focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black focus-visible:outline-none"
                                         aria-label="Изменить аватар"
                                     >
-                                        <Avatar className="h-32 w-32 rounded-full border-4 border-black bg-[#0a0a0a] shadow-2xl sm:h-40 sm:w-40">
+                                        <Avatar className="h-32 w-32 rounded-full border-4 border-black bg-slate-950 shadow-2xl sm:h-40 sm:w-40">
                                             <AvatarImage
                                                 src={avatarSource}
                                                 alt={user.name}
                                             />
-                                            <AvatarFallback className="bg-[#0a0a0a] text-4xl text-orange-500">
+                                            <AvatarFallback className="bg-slate-950 text-4xl text-emerald-400">
                                                 {initials}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="absolute inset-0 rounded-full bg-black/0 transition group-hover:bg-black/20" />
                                         <div className="absolute inset-x-0 bottom-3 flex justify-center">
                                             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                                                <Camera className="h-3.5 w-3.5 text-orange-500" />
+                                                <Camera className="h-3.5 w-3.5 text-emerald-400" />
                                                 Изменить фото
                                             </span>
                                         </div>
                                     </button>
                                 </DialogTrigger>
-
                             </div>
 
-                            <DialogContent className="max-w-xl border border-white/10 bg-[#090909] p-0 text-white shadow-2xl">
+                            <DialogContent className="max-w-xl border border-white/10 bg-slate-950/95 p-0 text-white shadow-2xl backdrop-blur-sm">
                                 <div className="flex flex-col gap-6 p-6 sm:p-7">
                                     <DialogHeader className="pr-10">
                                         <DialogTitle className="text-xl font-semibold text-white">
@@ -277,8 +294,8 @@ export default function ProfileShow({
                                         <DialogDescription className="text-sm text-zinc-400">
                                             Перетащите изображение в зону
                                             загрузки или выберите файл вручную.
-                                            Поддерживаются JPG, PNG и WEBP до
-                                            2 МБ.
+                                            Поддерживаются JPG, PNG и WEBP до 2
+                                            МБ.
                                         </DialogDescription>
                                     </DialogHeader>
 
@@ -292,14 +309,17 @@ export default function ProfileShow({
                                                 tabIndex={processing ? -1 : 0}
                                                 aria-label="Выбрать аватар"
                                                 className={cn(
-                                                    'flex w-full flex-col items-center rounded-[1.75rem] border border-dashed px-6 py-8 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090909]',
+                                                    'flex w-full flex-col items-center rounded-[1.75rem] border border-dashed px-6 py-8 text-center transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus-visible:outline-none',
                                                     isDraggingAvatar
-                                                        ? 'border-orange-400 bg-orange-500/12'
-                                                        : 'border-white/10 bg-white/[0.03] hover:border-orange-500/35 hover:bg-orange-500/8',
-                                                    processing && 'cursor-wait opacity-80',
+                                                        ? 'border-emerald-400 bg-emerald-500/12'
+                                                        : 'border-white/10 bg-slate-900/45 hover:border-emerald-500/35 hover:bg-emerald-500/8',
+                                                    processing &&
+                                                        'cursor-wait opacity-80',
                                                 )}
                                                 onClick={openAvatarPicker}
-                                                onKeyDown={handleAvatarDropzoneKeyDown}
+                                                onKeyDown={
+                                                    handleAvatarDropzoneKeyDown
+                                                }
                                                 onDragEnter={(event) => {
                                                     if (processing) {
                                                         return;
@@ -322,12 +342,15 @@ export default function ProfileShow({
                                                 }}
                                                 onDrop={handleAvatarDrop}
                                             >
-                                                <Avatar className="h-36 w-36 rounded-full border-4 border-white/10 bg-[#0a0a0a] shadow-2xl sm:h-44 sm:w-44">
+                                                <Avatar className="h-36 w-36 rounded-full border-4 border-white/10 bg-slate-950 shadow-2xl sm:h-44 sm:w-44">
                                                     <AvatarImage
-                                                        src={avatarPreviewUrl ?? avatarSource}
+                                                        src={
+                                                            avatarPreviewUrl ??
+                                                            avatarSource
+                                                        }
                                                         alt={user.name}
                                                     />
-                                                    <AvatarFallback className="bg-[#0a0a0a] text-5xl text-orange-500">
+                                                    <AvatarFallback className="bg-slate-950 text-5xl text-emerald-400">
                                                         {initials}
                                                     </AvatarFallback>
                                                 </Avatar>
@@ -384,7 +407,7 @@ export default function ProfileShow({
                                         />
 
                                         {progress && (
-                                            <p className="text-center text-sm text-orange-400">
+                                            <p className="text-center text-sm text-emerald-400">
                                                 Загрузка: {progress.percentage}%
                                             </p>
                                         )}
@@ -403,7 +426,7 @@ export default function ProfileShow({
                                                 disabled={
                                                     !data.avatar || processing
                                                 }
-                                                className="bg-orange-500 text-white hover:bg-orange-600"
+                                                className="bg-emerald-500 text-white hover:bg-emerald-600"
                                             >
                                                 {processing ? (
                                                     <Spinner />
@@ -420,12 +443,12 @@ export default function ProfileShow({
                     </div>
 
                     <div className="mb-8">
-                        <h1 className="flex items-center gap-3 text-3xl font-extrabold tracking-tight text-white">
+                        <h1 className="flex items-center gap-3 text-3xl font-extrabold text-white">
                             {user.name}
                         </h1>
-                        <p className="mt-1 mb-4 flex items-center gap-1.5 text-sm font-medium text-orange-500">
+                        <p className="mt-1 mb-4 flex items-center gap-1.5 text-sm font-medium text-emerald-400">
                             <Camera className="h-4 w-4" />
-                            Партнер PechatPRO
+                            {user.roles?.[0] ?? 'Партнер PechatPRO'}
                         </p>
 
                         <div className="mt-4 flex flex-wrap items-center gap-6 text-sm text-zinc-400">
@@ -454,7 +477,13 @@ export default function ProfileShow({
                             )}
                             <div className="flex items-center gap-1.5">
                                 <Calendar className="h-4 w-4 text-zinc-500" />
-                                <span>В системе с 2026 г.</span>
+                                <span>
+                                    В системе с{' '}
+                                    {user.created_at
+                                        ? new Date(user.created_at).getFullYear()
+                                        : new Date().getFullYear()}{' '}
+                                    г.
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -467,26 +496,26 @@ export default function ProfileShow({
 
                     <div className="mb-10 flex gap-6 overflow-x-auto border-y border-white/5 py-5 sm:gap-10">
                         <div className="group flex cursor-default flex-col">
-                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-orange-500">
+                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-emerald-400">
                                 {stats.totalOrders}
                             </span>
-                            <span className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+                            <span className="text-xs font-semibold text-zinc-500 uppercase">
                                 Всего проектов
                             </span>
                         </div>
                         <div className="group flex cursor-default flex-col">
-                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-orange-500">
+                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-emerald-400">
                                 {stats.activeOrders}
                             </span>
-                            <span className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+                            <span className="text-xs font-semibold text-zinc-500 uppercase">
                                 В работе
                             </span>
                         </div>
                         <div className="group flex cursor-default flex-col">
-                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-orange-500">
+                            <span className="text-2xl font-bold text-white transition-colors group-hover:text-emerald-400">
                                 {stats.completed}
                             </span>
-                            <span className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+                            <span className="text-xs font-semibold text-zinc-500 uppercase">
                                 Готовых тиражей
                             </span>
                         </div>
@@ -497,14 +526,14 @@ export default function ProfileShow({
                             open={isProfileDialogOpen}
                             onOpenChange={handleProfileDialogChange}
                         >
-                            <Card className="flex flex-col justify-between border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-sm">
+                            <Card className="flex flex-col justify-between border-white/5 bg-slate-900/45 p-6 shadow-xl backdrop-blur-sm">
                                 <div>
                                     <h3 className="mb-2 text-lg font-semibold text-white">
                                         Личные данные
                                     </h3>
                                     <p className="mb-6 text-sm text-zinc-400">
-                                        Имя, телефон, город и Instagram для связи с
-                                        менеджером и клиентом.
+                                        Имя, телефон, город и Instagram для
+                                        связи с менеджером и клиентом.
                                     </p>
                                 </div>
                                 <DialogTrigger asChild>
@@ -517,7 +546,7 @@ export default function ProfileShow({
                                 </DialogTrigger>
                             </Card>
 
-                            <DialogContent className="border border-white/10 bg-[#090909] text-white shadow-2xl sm:max-w-lg">
+                            <DialogContent className="border border-white/10 bg-slate-950/95 text-white shadow-2xl backdrop-blur-sm sm:max-w-lg">
                                 <DialogHeader>
                                     <DialogTitle className="text-xl font-semibold text-white">
                                         Редактировать профиль
@@ -532,88 +561,144 @@ export default function ProfileShow({
                                     className="space-y-4"
                                     onSubmit={(event) => {
                                         event.preventDefault();
-                                        informationForm.put(updateProfileInformation.url(), {
-                                            preserveScroll: true,
-                                            onSuccess: () => {
-                                                setIsProfileDialogOpen(false);
+                                        informationForm.put(
+                                            updateProfileInformation.url(),
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    setIsProfileDialogOpen(
+                                                        false,
+                                                    );
+                                                },
                                             },
-                                        });
+                                        );
                                     }}
                                 >
                                     <div className="grid gap-2">
-                                        <Label htmlFor="profile_city" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="profile_city"
+                                            className="text-zinc-300"
+                                        >
                                             Город
                                         </Label>
                                         <select
                                             id="profile_city"
                                             value={informationForm.data.city_id}
                                             onChange={(event) =>
-                                                informationForm.setData('city_id', event.target.value)
+                                                informationForm.setData(
+                                                    'city_id',
+                                                    event.target.value,
+                                                )
                                             }
-                                            className="h-10 rounded-4xl border border-white/10 bg-zinc-950/50 px-3 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                                            className="h-10 rounded-4xl border border-white/10 bg-zinc-950/50 px-3 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                                         >
-                                            <option value="">Выберите город</option>
+                                            <option value="">
+                                                Выберите город
+                                            </option>
                                             {cities.map((city) => (
-                                                <option key={city.id} value={city.id}>
+                                                <option
+                                                    key={city.id}
+                                                    value={city.id}
+                                                >
                                                     {city.name}
                                                 </option>
                                             ))}
                                         </select>
-                                        <InputError message={informationForm.errors.city_id} />
+                                        <InputError
+                                            message={
+                                                informationForm.errors.city_id
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="profile_name" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="profile_name"
+                                            className="text-zinc-300"
+                                        >
                                             Имя и фамилия
                                         </Label>
                                         <div className="relative">
-                                            <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                                            <UserRound className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                                             <Input
                                                 id="profile_name"
-                                                value={informationForm.data.name}
+                                                value={
+                                                    informationForm.data.name
+                                                }
                                                 onChange={(event) =>
-                                                    informationForm.setData('name', event.target.value)
+                                                    informationForm.setData(
+                                                        'name',
+                                                        event.target.value,
+                                                    )
                                                 }
                                                 className="border-white/10 bg-zinc-950/50 pl-10 text-white"
                                             />
                                         </div>
-                                        <InputError message={informationForm.errors.name} />
+                                        <InputError
+                                            message={
+                                                informationForm.errors.name
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="profile_phone" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="profile_phone"
+                                            className="text-zinc-300"
+                                        >
                                             Номер телефона
                                         </Label>
                                         <PhoneInput
                                             id="profile_phone"
                                             value={informationForm.data.phone}
                                             onAccept={(value) =>
-                                                informationForm.setData('phone', String(value))
+                                                informationForm.setData(
+                                                    'phone',
+                                                    String(value),
+                                                )
                                             }
                                             placeholder="+7 701 123 45 67"
                                             className="border-white/10 bg-zinc-950/50 text-white"
                                         />
-                                        <InputError message={informationForm.errors.phone} />
+                                        <InputError
+                                            message={
+                                                informationForm.errors.phone
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="profile_instagram" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="profile_instagram"
+                                            className="text-zinc-300"
+                                        >
                                             Instagram
                                         </Label>
                                         <div className="relative">
-                                            <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                                            <Link2 className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                                             <Input
                                                 id="profile_instagram"
                                                 type="url"
-                                                value={informationForm.data.instagram_url}
+                                                value={
+                                                    informationForm.data
+                                                        .instagram_url
+                                                }
                                                 onChange={(event) =>
-                                                    informationForm.setData('instagram_url', event.target.value)
+                                                    informationForm.setData(
+                                                        'instagram_url',
+                                                        event.target.value,
+                                                    )
                                                 }
                                                 placeholder="https://instagram.com/vash_profil"
                                                 className="border-white/10 bg-zinc-950/50 pl-10 text-white"
                                             />
                                         </div>
-                                        <InputError message={informationForm.errors.instagram_url} />
+                                        <InputError
+                                            message={
+                                                informationForm.errors
+                                                    .instagram_url
+                                            }
+                                        />
                                     </div>
 
                                     <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end">
@@ -621,16 +706,22 @@ export default function ProfileShow({
                                             type="button"
                                             variant="outline"
                                             className="border-white/10 bg-transparent text-white hover:bg-white/5"
-                                            onClick={() => handleProfileDialogChange(false)}
+                                            onClick={() =>
+                                                handleProfileDialogChange(false)
+                                            }
                                         >
                                             Отмена
                                         </Button>
                                         <Button
                                             type="submit"
-                                            disabled={informationForm.processing}
-                                            className="bg-orange-500 text-white hover:bg-orange-600"
+                                            disabled={
+                                                informationForm.processing
+                                            }
+                                            className="bg-emerald-500 text-white hover:bg-emerald-600"
                                         >
-                                            {informationForm.processing && <Spinner />}
+                                            {informationForm.processing && (
+                                                <Spinner />
+                                            )}
                                             Сохранить
                                         </Button>
                                     </div>
@@ -642,7 +733,7 @@ export default function ProfileShow({
                             open={isPasswordDialogOpen}
                             onOpenChange={handlePasswordDialogChange}
                         >
-                            <Card className="flex flex-col justify-between border-white/5 bg-white/[0.02] p-6 shadow-xl backdrop-blur-sm">
+                            <Card className="flex flex-col justify-between border-white/5 bg-slate-900/45 p-6 shadow-xl backdrop-blur-sm">
                                 <div>
                                     <h3 className="mb-2 text-lg font-semibold text-white">
                                         Безопасность
@@ -662,7 +753,7 @@ export default function ProfileShow({
                                 </DialogTrigger>
                             </Card>
 
-                            <DialogContent className="border border-white/10 bg-[#090909] text-white shadow-2xl sm:max-w-lg">
+                            <DialogContent className="border border-white/10 bg-slate-950/95 text-white shadow-2xl backdrop-blur-sm sm:max-w-lg">
                                 <DialogHeader>
                                     <DialogTitle className="text-xl font-semibold text-white">
                                         Обновить пароль
@@ -676,64 +767,108 @@ export default function ProfileShow({
                                     className="space-y-4"
                                     onSubmit={(event) => {
                                         event.preventDefault();
-                                        passwordForm.put(updateProfilePassword.url(), {
-                                            preserveScroll: true,
-                                            onSuccess: () => {
-                                                passwordForm.reset();
-                                                setIsPasswordDialogOpen(false);
+                                        passwordForm.put(
+                                            updateProfilePassword.url(),
+                                            {
+                                                preserveScroll: true,
+                                                onSuccess: () => {
+                                                    passwordForm.reset();
+                                                    setIsPasswordDialogOpen(
+                                                        false,
+                                                    );
+                                                },
                                             },
-                                        });
+                                        );
                                     }}
                                 >
                                     <div className="grid gap-2">
-                                        <Label htmlFor="current_password" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="current_password"
+                                            className="text-zinc-300"
+                                        >
                                             Текущий пароль
                                         </Label>
                                         <PasswordInput
                                             id="current_password"
-                                            value={passwordForm.data.current_password}
+                                            value={
+                                                passwordForm.data
+                                                    .current_password
+                                            }
                                             onChange={(event) =>
-                                                passwordForm.setData('current_password', event.target.value)
+                                                passwordForm.setData(
+                                                    'current_password',
+                                                    event.target.value,
+                                                )
                                             }
                                             className="border-white/10 bg-zinc-950/50 text-white"
                                         />
-                                        <InputError message={passwordForm.errors.current_password} />
+                                        <InputError
+                                            message={
+                                                passwordForm.errors
+                                                    .current_password
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="new_password" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="new_password"
+                                            className="text-zinc-300"
+                                        >
                                             Новый пароль
                                         </Label>
                                         <PasswordInput
                                             id="new_password"
                                             value={passwordForm.data.password}
                                             onChange={(event) =>
-                                                passwordForm.setData('password', event.target.value)
+                                                passwordForm.setData(
+                                                    'password',
+                                                    event.target.value,
+                                                )
                                             }
                                             className="border-white/10 bg-zinc-950/50 text-white"
                                         />
-                                        <InputError message={passwordForm.errors.password} />
+                                        <InputError
+                                            message={
+                                                passwordForm.errors.password
+                                            }
+                                        />
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="password_confirmation" className="text-zinc-300">
+                                        <Label
+                                            htmlFor="password_confirmation"
+                                            className="text-zinc-300"
+                                        >
                                             Подтверждение пароля
                                         </Label>
                                         <PasswordInput
                                             id="password_confirmation"
-                                            value={passwordForm.data.password_confirmation}
+                                            value={
+                                                passwordForm.data
+                                                    .password_confirmation
+                                            }
                                             onChange={(event) =>
-                                                passwordForm.setData('password_confirmation', event.target.value)
+                                                passwordForm.setData(
+                                                    'password_confirmation',
+                                                    event.target.value,
+                                                )
                                             }
                                             className="border-white/10 bg-zinc-950/50 text-white"
                                         />
-                                        <InputError message={passwordForm.errors.password_confirmation} />
+                                        <InputError
+                                            message={
+                                                passwordForm.errors
+                                                    .password_confirmation
+                                            }
+                                        />
                                     </div>
 
-                                    <div className="rounded-2xl border border-white/6 bg-black/20 px-4 py-3 text-xs text-zinc-500">
+                                    <div className="rounded-2xl border border-white/6 bg-slate-950/45 px-4 py-3 text-xs text-zinc-500">
                                         <div className="inline-flex items-center gap-2">
-                                            <Lock className="h-4 w-4 text-orange-400" />
-                                            После смены пароля используйте новый пароль при следующем входе.
+                                            <Lock className="h-4 w-4 text-emerald-400" />
+                                            После смены пароля используйте новый
+                                            пароль при следующем входе.
                                         </div>
                                     </div>
 
@@ -742,16 +877,22 @@ export default function ProfileShow({
                                             type="button"
                                             variant="outline"
                                             className="border-white/10 bg-transparent text-white hover:bg-white/5"
-                                            onClick={() => handlePasswordDialogChange(false)}
+                                            onClick={() =>
+                                                handlePasswordDialogChange(
+                                                    false,
+                                                )
+                                            }
                                         >
                                             Отмена
                                         </Button>
                                         <Button
                                             type="submit"
                                             disabled={passwordForm.processing}
-                                            className="bg-orange-500 text-white hover:bg-orange-600"
+                                            className="bg-emerald-500 text-white hover:bg-emerald-600"
                                         >
-                                            {passwordForm.processing && <Spinner />}
+                                            {passwordForm.processing && (
+                                                <Spinner />
+                                            )}
                                             Обновить пароль
                                         </Button>
                                     </div>

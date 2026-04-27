@@ -8,16 +8,20 @@ test('projects table contains the required columns', function () {
     expect(Schema::hasColumns('projects', [
         'id',
         'photographer_id',
+        'montage_user_id',
+        'designer_user_id',
         'name',
         'class_name',
         'album_type',
         'album_size',
         'cover_type',
         'page_count',
+        'portrait_count',
         'student_count',
         'print_quantity',
         'client_selection_token',
         'client_selection_published_at',
+        'client_selection_deadline_at',
         'client_selection_submitted_at',
         'montage_review_token',
         'montage_review_published_at',
@@ -51,6 +55,7 @@ test('projects can be created with the configured album fields', function () {
         'album_size' => '25x25',
         'cover_type' => 'Мягкий',
         'page_count' => 20,
+        'portrait_count' => 28,
         'student_count' => 28,
         'print_quantity' => 30,
     ]);
@@ -62,6 +67,7 @@ test('projects can be created with the configured album fields', function () {
     expect($project->album_size)->toBe('25x25');
     expect($project->cover_type)->toBe('Мягкий');
     expect($project->page_count)->toBe(20);
+    expect($project->portrait_count)->toBe(28);
     expect($project->student_count)->toBe(28);
     expect($project->print_quantity)->toBe(30);
 });

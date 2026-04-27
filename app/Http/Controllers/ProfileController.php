@@ -22,6 +22,16 @@ class ProfileController extends Controller
     {
         $user = $request->user()?->load('city:id,name');
 
+        $totalProjects = 0;
+        $completedProjects = 0;
+        $activeProjects = 0;
+
+        if ($user !== null) {
+            $totalProjects = $user->projects()->count();
+            $completedProjects = $user->projects()->whereNotNull('printing_ready_at')->count();
+            $activeProjects = $totalProjects - $completedProjects;
+        }
+
         return Inertia::render('profile/show', [
             'cities' => City::query()
                 ->orderBy('name')
@@ -41,6 +51,12 @@ class ProfileController extends Controller
                 'avatar' => $user?->avatar,
                 'created_at' => $user?->created_at,
                 'updated_at' => $user?->updated_at,
+                'roles' => $user?->getRoleNames()->values()->all() ?? [],
+            ],
+            'stats' => [
+                'totalOrders' => $totalProjects,
+                'activeOrders' => $activeProjects,
+                'completed' => $completedProjects,
             ],
             'status' => $request->session()->get('status'),
         ]);

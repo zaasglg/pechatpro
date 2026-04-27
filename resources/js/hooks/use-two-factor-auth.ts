@@ -68,7 +68,10 @@ export const useTwoFactorAuth = (): UseTwoFactorAuthReturn => {
 
             setManualSetupKey(key);
         } catch {
-            setErrors((prev) => [...prev, 'Не удалось загрузить ключ настройки']);
+            setErrors((prev) => [
+                ...prev,
+                'Не удалось загрузить ключ настройки',
+            ]);
             setManualSetupKey(null);
         }
     }, [submit]);
@@ -79,7 +82,10 @@ export const useTwoFactorAuth = (): UseTwoFactorAuthReturn => {
             const codes = (await submit(recoveryCodes())) as string[];
             setRecoveryCodesList(codes);
         } catch {
-            setErrors((prev) => [...prev, 'Не удалось загрузить резервные коды']);
+            setErrors((prev) => [
+                ...prev,
+                'Не удалось загрузить резервные коды',
+            ]);
             setRecoveryCodesList([]);
         }
     }, [submit]);

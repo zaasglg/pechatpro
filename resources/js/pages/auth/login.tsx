@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
+import { useTranslations } from '@/hooks/use-translations';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 
@@ -16,12 +17,19 @@ type Props = {
 };
 
 export default function Login({ status, canRegister }: Props) {
+    const { t } = useTranslations();
+
+    setLayoutProps({
+        title: t('auth.login.layout_title'),
+        description: t('auth.login.layout_description'),
+    });
+
     return (
         <>
-            <Head title="Вход в систему" />
+            <Head title={t('auth.login.meta_title')} />
 
             <Form
-                {...store.form()}
+                action={store()}
                 resetOnSuccess={['password']}
                 className="flex flex-col gap-6"
             >
@@ -33,17 +41,17 @@ export default function Login({ status, canRegister }: Props) {
                                     htmlFor="phone"
                                     className="text-zinc-300"
                                 >
-                                    Номер телефона
+                                    {t('auth.login.phone_label')}
                                 </Label>
                                 <PhoneInput
                                     id="phone"
                                     name="phone"
                                     required
-                                    autoFocus
-                                    tabIndex={1}
                                     autoComplete="tel"
-                                    placeholder="+7 701 123 45 67"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.login.phone_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.phone} />
                             </div>
@@ -54,17 +62,18 @@ export default function Login({ status, canRegister }: Props) {
                                         htmlFor="password"
                                         className="text-zinc-300"
                                     >
-                                        Пароль
+                                        {t('auth.login.password_label')}
                                     </Label>
                                 </div>
                                 <PasswordInput
                                     id="password"
                                     name="password"
                                     required
-                                    tabIndex={2}
                                     autoComplete="current-password"
-                                    placeholder="Ваш пароль"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.login.password_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError message={errors.password} />
                             </div>
@@ -73,37 +82,34 @@ export default function Login({ status, canRegister }: Props) {
                                 <Checkbox
                                     id="remember"
                                     name="remember"
-                                    tabIndex={3}
-                                    className="border-white/20 data-[state=checked]:border-orange-500 data-[state=checked]:bg-orange-500"
+                                    className="border-white/20 data-[state=checked]:border-emerald-500 data-[state=checked]:bg-emerald-500"
                                 />
                                 <Label
                                     htmlFor="remember"
                                     className="text-zinc-300"
                                 >
-                                    Запомнить меня
+                                    {t('auth.login.remember')}
                                 </Label>
                             </div>
 
                             <Button
                                 type="submit"
-                                className="mt-4 h-11 w-full bg-orange-500 text-base font-medium text-white shadow-lg shadow-orange-500/25 transition-all hover:scale-[1.02] hover:bg-orange-600"
-                                tabIndex={4}
+                                className="mt-4 h-11 w-full bg-emerald-500 text-base font-medium text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] hover:bg-emerald-600"
                                 disabled={processing}
                             >
                                 {processing && <Spinner />}
-                                Войти в систему
+                                {t('auth.login.submit')}
                             </Button>
                         </div>
 
                         {canRegister && (
                             <div className="mt-2 text-center text-sm text-zinc-400">
-                                Нет аккаунта?{' '}
+                                {t('auth.login.no_account')}{' '}
                                 <TextLink
                                     href={register()}
-                                    tabIndex={5}
-                                    className="font-medium text-orange-400 transition-colors hover:text-orange-500"
+                                    className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
                                 >
-                                    Зарегистрироваться
+                                    {t('auth.login.register')}
                                 </TextLink>
                             </div>
                         )}
@@ -112,16 +118,10 @@ export default function Login({ status, canRegister }: Props) {
             </Form>
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-500">
+                <div className="mb-4 text-center text-sm font-medium text-emerald-400">
                     {status}
                 </div>
             )}
         </>
     );
 }
-
-Login.layout = {
-    title: 'Добро пожаловать',
-    description:
-        'Войдите в систему по номеру телефона для управления вашими заказами',
-};

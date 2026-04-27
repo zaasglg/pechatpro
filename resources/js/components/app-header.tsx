@@ -1,5 +1,23 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
+import {
+    BarChart3,
+    Calculator,
+    Folder,
+    MapPinned,
+    Menu,
+    Printer,
+    ShieldCheck,
+    Users,
+    WandSparkles,
+} from 'lucide-react';
+import { index as cityIndex } from '@/actions/App/Http/Controllers/Admin/CityController';
+import { index as moderatorProjectIndex } from '@/actions/App/Http/Controllers/Admin/ModeratorProjectController';
+import { index as photographerApprovalIndex } from '@/actions/App/Http/Controllers/Admin/PhotographerApprovalController';
+import { index as projectPriceIndex } from '@/actions/App/Http/Controllers/Admin/ProjectPriceController';
+import { index as adminUsersIndex } from '@/actions/App/Http/Controllers/Admin/UserController';
+import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
+import { index as projectIndex } from '@/actions/App/Http/Controllers/PhotographerProjectController';
+import { index as printProjectIndex } from '@/actions/App/Http/Controllers/PrintProjectController';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
@@ -31,7 +49,7 @@ import {
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { useInitials } from '@/hooks/use-initials';
-import { cn, toUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -39,40 +57,93 @@ type Props = {
     breadcrumbs?: BreadcrumbItem[];
 };
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Панель',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const rightNavItems: NavItem[] = [
-    {
-        title: 'Репозиторий',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Документация',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
-
-const activeItemStyles =
-    'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
+const activeItemStyles = 'bg-white/8 text-white';
 
 export function AppHeader({ breadcrumbs = [] }: Props) {
     const page = usePage();
     const { auth } = page.props;
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
+    const mainNavItems: NavItem[] = [
+        {
+            title: 'Аналитика',
+            href: dashboard(),
+            icon: BarChart3,
+        },
+        ...(auth.user?.roles.includes('Фотограф')
+            ? [
+                  {
+                      title: 'Проекты',
+                      href: projectIndex(),
+                      icon: Folder,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canApprovePhotographers
+            ? [
+                  {
+                      title: 'Города',
+                      href: cityIndex(),
+                      icon: MapPinned,
+                  } satisfies NavItem,
+                  {
+                      title: 'Подтверждения',
+                      href: photographerApprovalIndex(),
+                      icon: ShieldCheck,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canManageProjectPrices
+            ? [
+                  {
+                      title: 'Правила цен',
+                      href: projectPriceIndex(),
+                      icon: Calculator,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canManageUsers
+            ? [
+                  {
+                      title: 'Пользователи',
+                      href: adminUsersIndex(),
+                      icon: Users,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canModerateProjects
+            ? [
+                  {
+                      title: 'Проекты',
+                      href: moderatorProjectIndex(),
+                      icon: ShieldCheck,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canMontageProjects
+            ? [
+                  {
+                      title: 'Монтаж',
+                      href: montageProjectIndex(),
+                      icon: WandSparkles,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canPrintProjects
+            ? [
+                  {
+                      title: 'Печать',
+                      href: printProjectIndex(),
+                      icon: Printer,
+                  } satisfies NavItem,
+              ]
+            : []),
+    ];
 
     return (
         <>
-            <div className="border-none">
-                <div className="mx-auto flex h-16 items-center px-4 md:max-w-7xl">
+            <div className="border-b border-white/8 bg-background/78 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55">
+                <div className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4">
                     {/* Mobile Menu */}
                     <div className="lg:hidden">
                         <Sheet>
@@ -87,7 +158,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                             </SheetTrigger>
                             <SheetContent
                                 side="left"
-                                className="flex h-full w-64 flex-col items-stretch justify-between bg-sidebar"
+                                className="flex h-full w-72 flex-col items-stretch justify-between p-0 text-sidebar-foreground"
                             >
                                 <SheetTitle className="sr-only">
                                     Меню навигации
@@ -102,7 +173,12 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                 <Link
                                                     key={item.title}
                                                     href={item.href}
-                                                    className="flex items-center space-x-2 font-medium"
+                                                    className={cn(
+                                                        'flex items-center space-x-2 rounded-xl px-3 py-2 font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                                        isCurrentUrl(item.href)
+                                                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                                                            : 'text-sidebar-foreground/80',
+                                                    )}
                                                 >
                                                     {item.icon && (
                                                         <item.icon className="h-5 w-5" />
@@ -112,22 +188,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                             ))}
                                         </div>
 
-                                        <div className="flex flex-col space-y-4">
-                                            {rightNavItems.map((item) => (
-                                                <a
-                                                    key={item.title}
-                                                    href={toUrl(item.href)}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center space-x-2 font-medium"
-                                                >
-                                                    {item.icon && (
-                                                        <item.icon className="h-5 w-5" />
-                                                    )}
-                                                    <span>{item.title}</span>
-                                                </a>
-                                            ))}
-                                        </div>
+                                        <div />
                                     </div>
                                 </div>
                             </SheetContent>
@@ -143,12 +204,12 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </Link>
 
                     {/* Desktop Navigation */}
-                    <div className="ml-6 hidden h-full items-center space-x-6 lg:flex">
+                    <div className="ml-6 hidden h-full items-center lg:flex">
                         <NavigationMenu className="flex h-full items-stretch">
-                            <NavigationMenuList className="flex h-full items-stretch space-x-2">
-                                {mainNavItems.map((item, index) => (
+                            <NavigationMenuList className="flex h-full items-stretch gap-1">
+                                {mainNavItems.map((item) => (
                                     <NavigationMenuItem
-                                        key={index}
+                                        key={item.title}
                                         className="relative flex h-full items-center"
                                     >
                                         <Link
@@ -159,7 +220,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                                     item.href,
                                                     activeItemStyles,
                                                 ),
-                                                'h-9 cursor-pointer px-3',
+                                                'h-10 cursor-pointer rounded-xl bg-transparent px-4 text-sm text-muted-foreground hover:bg-white/5 hover:text-white',
                                             )}
                                         >
                                             {item.icon && (
@@ -168,7 +229,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                             {item.title}
                                         </Link>
                                         {isCurrentUrl(item.href) && (
-                                            <div className="absolute bottom-0 left-0 h-0.5 w-full translate-y-px bg-black dark:bg-white"></div>
+                                            <div className="absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-primary"></div>
                                         )}
                                     </NavigationMenuItem>
                                 ))}
@@ -177,38 +238,17 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
 
                     <div className="ml-auto flex items-center space-x-2">
-                        <div className="relative flex items-center space-x-1">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="group h-9 w-9 cursor-pointer"
-                            >
-                                <Search className="!size-5 opacity-80 group-hover:opacity-100" />
-                            </Button>
-                            <div className="ml-1 hidden gap-1 lg:flex">
-                                {rightNavItems.map((item) => (
-                                    <Tooltip key={item.title}>
-                                        <TooltipTrigger>
-                                            <a
-                                                href={toUrl(item.href)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="group inline-flex h-9 w-9 items-center justify-center rounded-md bg-transparent p-0 text-sm font-medium text-accent-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
-                                            >
-                                                <span className="sr-only">
-                                                    {item.title}
-                                                </span>
-                                                {item.icon && (
-                                                    <item.icon className="size-5 opacity-80 group-hover:opacity-100" />
-                                                )}
-                                            </a>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>{item.title}</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                ))}
-                            </div>
+                        <div className="hidden items-center lg:flex">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="glass-control rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                                        {auth.user?.roles?.join(', ')}
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent showArrow={false}>
+                                    <p>Текущие роли пользователя</p>
+                                </TooltipContent>
+                            </Tooltip>
                         </div>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -237,8 +277,8 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                 </div>
             </div>
             {breadcrumbs.length > 1 && (
-                <div className="flex w-full border-b border-sidebar-border/70">
-                    <div className="mx-auto flex h-12 w-full items-center justify-start px-4 text-neutral-500 md:max-w-7xl">
+                <div className="flex w-full border-b border-white/6 bg-background/32 backdrop-blur-xl">
+                    <div className="mx-auto flex h-12 w-full max-w-7xl items-center justify-start px-4 text-neutral-500">
                         <Breadcrumbs breadcrumbs={breadcrumbs} />
                     </div>
                 </div>

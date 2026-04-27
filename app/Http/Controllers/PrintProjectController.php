@@ -6,15 +6,18 @@ use App\Models\Project;
 use App\Models\ProjectMontageAsset;
 use App\Models\ProjectStage;
 use App\Models\ProjectStageDefinition;
+use App\Support\ProjectMontageAssetPreviewGenerator;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PrintProjectController extends Controller
 {
+    public function __construct(private ProjectMontageAssetPreviewGenerator $previewGenerator) {}
+
     public function index(Request $request): Response
     {
         $projects = Project::query()
@@ -22,7 +25,9 @@ class PrintProjectController extends Controller
                 'photographer:id,name',
                 'projectStages.stageDefinition',
             ])
-            ->withCount('montageAssets')
+            ->withCount(['montageAssets as montage_assets_count' => function ($query): void {
+                $query->whereColumn('uploaded_by_user_id', 'projects.designer_user_id');
+            }])
             ->whereHas('projectStages', function ($query) use ($request): void {
                 $query
                     ->where('status', ProjectStage::STATUS_IN_PROGRESS)
@@ -73,12 +78,24 @@ class PrintProjectController extends Controller
                 'printingReadyAt' => $project->printing_ready_at?->toIso8601String(),
             ],
             'readyWorks' => $project->montageAssets
-                ->map(fn (ProjectMontageAsset $asset): array => [
-                    'id' => $asset->id,
-                    'name' => $asset->original_name,
-                    'url' => Storage::disk('public')->url($asset->path),
-                    'sizeBytes' => $asset->size_bytes,
-                ])
+                ->when(
+                    $project->designer_user_id !== null,
+                    fn ($assets) => $assets->where('uploaded_by_user_id', $project->designer_user_id)->values(),
+                )
+                ->map(function (ProjectMontageAsset $asset): array {
+                    $previewPath = $this->previewGenerator->resolvePreviewPath($asset);
+
+                    return [
+                        'id' => $asset->id,
+                        'name' => $asset->original_name,
+                        'url' => PublicStorageUrl::make($asset->path),
+                        'previewUrl' => $previewPath !== null
+                            ? PublicStorageUrl::make($previewPath)
+                            : null,
+                        'mimeType' => $asset->mime_type,
+                        'sizeBytes' => $asset->size_bytes,
+                    ];
+                })
                 ->values()
                 ->all(),
             'status' => $request->session()->get('status'),

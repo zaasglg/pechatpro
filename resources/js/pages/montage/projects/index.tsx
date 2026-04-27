@@ -1,9 +1,7 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { ExternalLink, ImageIcon, UserRound, WandSparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
 import { show as showMontageWorks } from '@/actions/App/Http/Controllers/ProjectMontageAssetController';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 
 type ProjectListItem = {
     id: number;
@@ -34,82 +32,63 @@ export default function MontageProjectIndex({ projects, status }: Props) {
         <>
             <Head title="Проекты монтажёра" />
 
-            <div className="flex w-full flex-col gap-6 p-4 md:p-8">
-                <div className="space-y-2">
-                    <h1 className="text-3xl font-semibold tracking-tight text-white">
+            <div className="mx-auto flex max-w-7xl flex-col gap-6 p-6">
+                <div>
+                    <h1 className="text-xl font-medium text-white">
                         Проекты для монтажа
                     </h1>
-                    <p className="max-w-3xl text-sm leading-6 text-zinc-400">
-                        Здесь видны только проекты, которые назначены вам и уже
-                        переведены на этап монтажа.
+                    <p className="mt-1 text-sm text-zinc-500">
+                        Проекты, назначенные вам на этап монтажа.
                     </p>
                 </div>
 
                 {status && (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                        {status}
-                    </div>
+                    <p className="text-sm text-emerald-400">{status}</p>
                 )}
 
-                <div className="grid gap-4 xl:grid-cols-2">
-                    {projects.map((project) => (
-                        <article
-                            key={project.id}
-                            className="rounded-[1.75rem] border border-white/6 bg-white/[0.03] p-5"
-                        >
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div className="space-y-3">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge
-                                            variant="outline"
-                                            className="border-orange-500/20 bg-orange-500/10 text-orange-200"
-                                        >
+                {projects.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-zinc-600">
+                        Проектов для монтажа пока нет
+                    </p>
+                ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {projects.map((project) => (
+                            <Link
+                                key={project.id}
+                                href={showMontageWorks(project.id)}
+                                prefetch
+                                className="group flex flex-col gap-4 rounded-2xl border border-white/6 bg-slate-900/45 p-5 transition hover:border-white/12 hover:bg-slate-900/70"
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-zinc-400">
                                             {project.className}
-                                        </Badge>
+                                        </span>
                                         {project.currentStageName && (
-                                            <Badge
-                                                variant="outline"
-                                                className="border-white/10 bg-white/5 text-zinc-200"
-                                            >
+                                            <span className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-zinc-400">
                                                 {project.currentStageName}
-                                            </Badge>
+                                            </span>
                                         )}
                                     </div>
-
-                                    <div>
-                                        <h2 className="text-xl font-semibold text-white">
-                                            {project.name}
-                                        </h2>
-                                        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-                                            <span className="inline-flex items-center gap-2">
-                                                <UserRound className="h-4 w-4 text-orange-400" />
-                                                {project.photographerName ?? 'Фотограф не указан'}
-                                            </span>
-                                            <span className="inline-flex items-center gap-2">
-                                                <ImageIcon className="h-4 w-4 text-orange-400" />
-                                                {project.montageAssetsCount} готовых работ
-                                            </span>
-                                            <span className="inline-flex items-center gap-2">
-                                                <WandSparkles className="h-4 w-4 text-orange-400" />
-                                                Этап монтажа
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <ArrowRight className="h-4 w-4 text-zinc-600 transition group-hover:text-zinc-400" />
                                 </div>
 
-                                <Button
-                                    asChild
-                                    className="bg-orange-500 text-white hover:bg-orange-600"
-                                >
-                                    <Link href={showMontageWorks(project.id)} prefetch>
-                                        <ExternalLink className="mr-2 h-4 w-4" />
-                                        Открыть проект
-                                    </Link>
-                                </Button>
-                            </div>
-                        </article>
-                    ))}
-                </div>
+                                <div>
+                                    <p className="font-medium text-white">
+                                        {project.name}
+                                    </p>
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        {project.photographerName ?? 'Фотограф не указан'}
+                                    </p>
+                                </div>
+
+                                <p className="mt-auto text-xs text-zinc-600">
+                                    {project.montageAssetsCount} готовых работ
+                                </p>
+                            </Link>
+                        ))}
+                    </div>
+                )}
             </div>
         </>
     );

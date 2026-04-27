@@ -1,6 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
-import { MapPinned, Pencil, Plus, Trash2, Users } from 'lucide-react';
-import { useState } from 'react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import {
     destroy as destroyCity,
     index as cityIndex,
@@ -8,10 +8,6 @@ import {
     update as updateCity,
 } from '@/actions/App/Http/Controllers/Admin/CityController';
 import InputError from '@/components/input-error';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 type CityItem = {
     id: number;
@@ -27,15 +23,10 @@ type Props = {
 
 export default function CitiesIndex({ cities, error, status }: Props) {
     const [editingCityId, setEditingCityId] = useState<number | null>(null);
+    const addInputRef = useRef<HTMLInputElement>(null);
 
-    const createForm = useForm({
-        name: '',
-    });
-
-    const editForm = useForm({
-        name: '',
-    });
-
+    const createForm = useForm({ name: '' });
+    const editForm = useForm({ name: '' });
     const deleteForm = useForm({});
 
     const startEditing = (city: CityItem) => {
@@ -54,201 +45,214 @@ export default function CitiesIndex({ cities, error, status }: Props) {
         <>
             <Head title="Города" />
 
-            <div className="flex w-full flex-col gap-6 p-6 md:p-10">
-                <div className="flex flex-col gap-2">
-                    <h1 className="text-[28px] font-semibold tracking-tight text-white">
-                        Города
-                    </h1>
-                    <p className="max-w-2xl text-sm leading-relaxed text-[#A1A1AA]">
-                        Управляйте списком городов, которые фотограф видит при регистрации и в профиле.
-                    </p>
-                </div>
+            <div className="mx-auto w-full max-w-7xl p-6">
+                <h1 className="text-xl font-medium text-white">Города</h1>
+                <p className="mt-1 text-sm text-zinc-500">
+                    Список городов для регистрации и профиля фотографа.
+                </p>
 
                 {status && (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                        {status}
-                    </div>
+                    <p className="mt-4 text-sm text-emerald-400">{status}</p>
                 )}
-
                 {error && (
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                        {error}
-                    </div>
+                    <p className="mt-4 text-sm text-red-400">{error}</p>
                 )}
 
-                <Card className="rounded-2xl border-white/5 bg-[#0f0f11] shadow-xl">
-                    <CardHeader>
-                        <CardTitle className="text-xl font-medium text-white">
-                            Добавить город
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <form
-                            className="flex flex-col gap-4 md:flex-row md:items-end"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                createForm.post(storeCity.url(), {
-                                    preserveScroll: true,
-                                    onSuccess: () => createForm.reset(),
-                                });
-                            }}
-                        >
-                            <div className="flex-1 space-y-2">
-                                <Label htmlFor="city_name" className="text-zinc-300">
-                                    Название города
-                                </Label>
-                                <Input
-                                    id="city_name"
-                                    value={createForm.data.name}
-                                    onChange={(event) =>
-                                        createForm.setData('name', event.target.value)
-                                    }
-                                    placeholder="Например, Алматы"
-                                    className="border-white/10 bg-zinc-950/50 text-white"
-                                />
-                                <InputError message={createForm.errors.name} />
-                            </div>
+                {/* Add form */}
+                <form
+                    className="mt-6 flex items-center gap-3"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        createForm.post(storeCity.url(), {
+                            preserveScroll: true,
+                            onSuccess: () => {
+                                createForm.reset();
+                                addInputRef.current?.focus();
+                            },
+                        });
+                    }}
+                >
+                    <input
+                        ref={addInputRef}
+                        value={createForm.data.name}
+                        onChange={(e) =>
+                            createForm.setData('name', e.target.value)
+                        }
+                        placeholder="Название города"
+                        className="flex-1 border-b border-white/10 bg-transparent py-2 text-sm text-white placeholder-zinc-600 outline-none transition focus:border-white/30"
+                    />
+                    <button
+                        type="submit"
+                        disabled={createForm.processing}
+                        className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+                    >
+                        <Plus className="h-4 w-4" />
+                        Добавить
+                    </button>
+                </form>
+                {createForm.errors.name && (
+                    <InputError
+                        message={createForm.errors.name}
+                        className="mt-1"
+                    />
+                )}
 
-                            <Button
-                                type="submit"
-                                disabled={createForm.processing}
-                                className="bg-orange-500 text-white hover:bg-orange-600"
-                            >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Добавить
-                            </Button>
-                        </form>
-                    </CardContent>
-                </Card>
-
-                <Card className="rounded-2xl border-white/5 bg-[#0f0f11] shadow-xl">
-                    <CardHeader>
-                        <CardTitle className="text-xl font-medium text-white">
-                            Список городов
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {cities.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-white/10 bg-black/40 px-6 py-14 text-center">
-                                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5">
-                                    <MapPinned className="h-6 w-6 text-orange-400" />
-                                </div>
-                                <h2 className="text-lg font-medium text-white">
-                                    Города еще не добавлены
-                                </h2>
-                                <p className="mt-2 text-sm text-zinc-500">
-                                    Добавьте хотя бы один город, чтобы фотограф мог выбрать его при регистрации.
-                                </p>
-                            </div>
-                        ) : (
-                            cities.map((city) => {
+                {/* City list */}
+                <div className="mt-6">
+                    {cities.length === 0 ? (
+                        <p className="py-8 text-center text-sm text-zinc-600">
+                            Городов пока нет
+                        </p>
+                    ) : (
+                        <ul className="grid grid-cols-1 gap-x-12 sm:grid-cols-2">
+                            {cities.map((city) => {
                                 const isEditing = editingCityId === city.id;
 
                                 return (
-                                    <div
+                                    <li
                                         key={city.id}
-                                        className="rounded-2xl border border-white/5 bg-[#141417] p-5"
+                                        className="border-t border-white/5"
                                     >
                                         {isEditing ? (
                                             <form
-                                                className="flex flex-col gap-4 md:flex-row md:items-end"
-                                                onSubmit={(event) => {
-                                                    event.preventDefault();
-                                                    editForm.put(updateCity.url(city.id), {
-                                                        preserveScroll: true,
-                                                        onSuccess: () => stopEditing(),
-                                                    });
+                                                className="flex items-center gap-3 py-3"
+                                                onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    editForm.put(
+                                                        updateCity.url(city.id),
+                                                        {
+                                                            preserveScroll: true,
+                                                            onSuccess: stopEditing,
+                                                        },
+                                                    );
                                                 }}
                                             >
-                                                <div className="flex-1 space-y-2">
-                                                    <Label className="text-zinc-300">
-                                                        Название города
-                                                    </Label>
-                                                    <Input
-                                                        value={editForm.data.name}
-                                                        onChange={(event) =>
-                                                            editForm.setData('name', event.target.value)
-                                                        }
-                                                        className="border-white/10 bg-zinc-950/50 text-white"
-                                                    />
-                                                    <InputError message={editForm.errors.name} />
-                                                </div>
-
-                                                <div className="flex flex-col gap-3 sm:flex-row">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        className="border-white/10 bg-transparent text-white hover:bg-white/5"
-                                                        onClick={stopEditing}
-                                                    >
-                                                        Отмена
-                                                    </Button>
-                                                    <Button
+                                                <input
+                                                    autoFocus
+                                                    value={editForm.data.name}
+                                                    onChange={(e) =>
+                                                        editForm.setData(
+                                                            'name',
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    className="flex-1 border-b border-white/20 bg-transparent py-1 text-sm text-white outline-none focus:border-white/40"
+                                                />
+                                                <div className="flex items-center gap-1">
+                                                    <IconButton
                                                         type="submit"
-                                                        disabled={editForm.processing}
-                                                        className="bg-orange-500 text-white hover:bg-orange-600"
+                                                        disabled={
+                                                            editForm.processing
+                                                        }
+                                                        title="Сохранить"
+                                                        className="text-emerald-400 hover:text-emerald-300"
                                                     >
-                                                        Сохранить
-                                                    </Button>
+                                                        <Check className="h-4 w-4" />
+                                                    </IconButton>
+                                                    <IconButton
+                                                        type="button"
+                                                        onClick={stopEditing}
+                                                        title="Отмена"
+                                                        className="text-zinc-500 hover:text-zinc-300"
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </IconButton>
                                                 </div>
+                                                {editForm.errors.name && (
+                                                    <InputError
+                                                        message={
+                                                            editForm.errors.name
+                                                        }
+                                                    />
+                                                )}
                                             </form>
                                         ) : (
-                                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/10 text-orange-400">
-                                                        <MapPinned className="h-5 w-5" />
-                                                    </div>
-                                                    <div>
-                                                        <h2 className="text-base font-medium text-white">
-                                                            {city.name}
-                                                        </h2>
-                                                        <p className="mt-1 inline-flex items-center gap-2 text-sm text-[#A1A1AA]">
-                                                            <Users className="h-4 w-4 text-orange-400" />
-                                                            Пользователей: {city.usersCount}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col gap-3 sm:flex-row">
-                                                    <Button
+                                            <div className="group flex items-center gap-4 py-3">
+                                                <span className="flex-1 text-sm text-white">
+                                                    {city.name}
+                                                </span>
+                                                <span className="text-xs text-zinc-600">
+                                                    {city.usersCount}{' '}
+                                                    {plural(
+                                                        city.usersCount,
+                                                        'пользователь',
+                                                        'пользователя',
+                                                        'пользователей',
+                                                    )}
+                                                </span>
+                                                <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100">
+                                                    <IconButton
                                                         type="button"
-                                                        variant="outline"
-                                                        className="border-white/10 bg-transparent text-white hover:bg-white/5"
-                                                        onClick={() => startEditing(city)}
+                                                        onClick={() =>
+                                                            startEditing(city)
+                                                        }
+                                                        title="Редактировать"
+                                                        className="text-zinc-500 hover:text-zinc-200"
                                                     >
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        Редактировать
-                                                    </Button>
-                                                    <Button
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </IconButton>
+                                                    <IconButton
                                                         type="button"
-                                                        variant="outline"
-                                                        className="border-red-500/20 bg-transparent text-red-300 hover:bg-red-500/10 hover:text-red-200"
-                                                        disabled={deleteForm.processing}
+                                                        disabled={
+                                                            deleteForm.processing
+                                                        }
                                                         onClick={() => {
-                                                            if (!window.confirm(`Удалить город ${city.name}?`)) {
+                                                            if (
+                                                                !window.confirm(
+                                                                    `Удалить город «${city.name}»?`,
+                                                                )
+                                                            )
                                                                 return;
-                                                            }
-
-                                                            deleteForm.delete(destroyCity.url(city.id), {
-                                                                preserveScroll: true,
-                                                            });
+                                                            deleteForm.delete(
+                                                                destroyCity.url(
+                                                                    city.id,
+                                                                ),
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
+                                                            );
                                                         }}
+                                                        title="Удалить"
+                                                        className="text-zinc-500 hover:text-red-400"
                                                     >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Удалить
-                                                    </Button>
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </IconButton>
                                                 </div>
                                             </div>
                                         )}
-                                    </div>
+                                    </li>
                                 );
-                            })
-                        )}
-                    </CardContent>
-                </Card>
+                            })}
+                        </ul>
+                    )}
+                </div>
             </div>
         </>
     );
+}
+
+function IconButton({
+    children,
+    className = '',
+    ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { className?: string }) {
+    return (
+        <button
+            {...props}
+            className={`rounded p-1 transition disabled:opacity-40 ${className}`}
+        >
+            {children}
+        </button>
+    );
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return many;
+    if (mod10 === 1) return one;
+    if (mod10 >= 2 && mod10 <= 4) return few;
+    return many;
 }
 
 CitiesIndex.layout = {

@@ -61,8 +61,7 @@ export default function TwoFactorRecoveryCodes({
                 </CardTitle>
                 <CardDescription>
                     Резервные коды помогут вернуть доступ, если вы потеряете
-                    устройство для 2FA. Храните их в надёжном менеджере
-                    паролей.
+                    устройство для 2FA. Храните их в надёжном менеджере паролей.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -77,13 +76,12 @@ export default function TwoFactorRecoveryCodes({
                             className="size-4"
                             aria-hidden="true"
                         />
-                        {codesAreVisible ? 'Скрыть' : 'Показать'} резервные
-                        коды
+                        {codesAreVisible ? 'Скрыть' : 'Показать'} резервные коды
                     </Button>
 
                     {canRegenerateCodes && (
                         <Form
-                            {...regenerateRecoveryCodes.form()}
+                            action={regenerateRecoveryCodes()}
                             options={{ preserveScroll: true }}
                             onSuccess={fetchRecoveryCodes}
                         >
@@ -148,8 +146,8 @@ export default function TwoFactorRecoveryCodes({
                                 <div className="text-xs text-muted-foreground select-none">
                                     <p id="regenerate-warning">
                                         Каждый резервный код можно использовать
-                                        один раз для входа в аккаунт, после
-                                        чего он будет удалён. Если нужны новые,
+                                        один раз для входа в аккаунт, после чего
+                                        он будет удалён. Если нужны новые,
                                         нажмите{' '}
                                         <span className="font-bold">
                                             «Обновить коды»

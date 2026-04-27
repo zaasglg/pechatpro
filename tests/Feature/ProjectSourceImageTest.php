@@ -4,6 +4,8 @@ use App\Models\Project;
 use App\Models\ProjectSourceImage;
 use App\Models\ProjectStageDefinition;
 use App\Models\User;
+use App\Support\ProjectSourceImagePreviewGenerator;
+use App\Support\PublicStorageUrl;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -16,7 +18,7 @@ beforeEach(function () {
     Role::findOrCreate('Фотограф', 'web');
 });
 
-test('photographers can open source images page for their project', function () {
+test('legacy source images url opens the project page on the source images tab', function () {
     Storage::fake('public');
 
     $photographer = User::factory()->create();
@@ -32,20 +34,106 @@ test('photographers can open source images page for their project', function () 
         'original_name' => 'source-1.jpg',
     ]);
 
-    $this->actingAs($photographer)
+    $response = $this->actingAs($photographer)
         ->get(route('projects.source-images.show', $project))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]));
+
+    $this->actingAs($photographer)
+        ->get($response->headers->get('Location'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('projects/source-images')
+            ->component('projects/show')
             ->where('project.id', $project->id)
             ->where('project.name', 'Алматы 7 класс')
+            ->where('initialTab', 'source-images')
             ->where('workflow.currentStageName', 'Новый проект')
             ->where('workflow.currentStageSlug', ProjectStageDefinition::SLUG_NEW_PROJECT)
             ->where('workflow.canMarkReady', true)
             ->has('sourceImages', 1)
             ->where('sourceImages.0.id', $sourceImage->id)
-            ->where('sourceImages.0.name', 'source-1.jpg'),
+            ->where('sourceImages.0.name', 'source-1.jpg')
+            ->where('sourceImages.0.sizeBytes', $sourceImage->size_bytes)
+            ->where('sourceImages.0.mimeType', $sourceImage->mime_type)
+            ->where('sourceImages.0.uploadedAt', $sourceImage->created_at?->toIso8601String()),
         );
+});
+
+test('project page exposes generated preview url for imagick-rasterized source images', function () {
+    Storage::fake('public');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+    $rasterizedPath = "project-source-images/{$project->id}/preview-source.tiff";
+    $temporaryTiffPath = tempnam(sys_get_temp_dir(), 'preview-source-');
+    $imagick = new Imagick;
+
+    $imagick->newImage(80, 80, '#44aa88');
+    $imagick->setImageFormat('tiff');
+    $imagick->writeImage($temporaryTiffPath);
+    $imagick->clear();
+    $imagick->destroy();
+
+    Storage::disk('public')->put($rasterizedPath, file_get_contents($temporaryTiffPath));
+    @unlink($temporaryTiffPath);
+
+    $sourceImage = ProjectSourceImage::factory()->for($project)->create([
+        'path' => $rasterizedPath,
+        'original_name' => 'preview-source.tiff',
+        'mime_type' => 'image/tiff',
+    ]);
+
+    $previewPath = ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id);
+
+    $this->actingAs($photographer)
+        ->get(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('sourceImages.0.previewUrl', PublicStorageUrl::make($previewPath))
+        );
+
+    Storage::disk('public')->assertExists($previewPath);
+});
+
+test('generator falls back to macos quick look when imagick can not rasterize a raw file', function () {
+    Storage::fake('public');
+
+    $project = Project::factory()->create();
+    $rawPath = "project-source-images/{$project->id}/preview-source.cr2";
+
+    Storage::disk('public')->put($rawPath, 'raw-binary');
+
+    $sourceImage = ProjectSourceImage::factory()->for($project)->create([
+        'path' => $rawPath,
+        'original_name' => 'preview-source.CR2',
+        'mime_type' => 'image/x-canon-cr2',
+    ]);
+
+    $generator = new class extends ProjectSourceImagePreviewGenerator
+    {
+        protected function generatePreviewWithImagick(string $absolutePath): ?string
+        {
+            throw new RuntimeException('delegate failed');
+        }
+
+        protected function generatePreviewWithMacOsQuickLook(string $absolutePath): ?string
+        {
+            return 'generated-preview';
+        }
+    };
+
+    $previewPath = $generator->ensureGeneratedPreviewPath($sourceImage);
+
+    expect($previewPath)->toBe(ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id));
+    Storage::disk('public')->assertExists($previewPath);
+    expect(Storage::disk('public')->get($previewPath))->toBe('generated-preview');
 });
 
 test('photographers can upload multiple source images to their project', function () {
@@ -66,7 +154,10 @@ test('photographers can upload multiple source images to their project', functio
 
     $response
         ->assertSessionHasNoErrors()
-        ->assertRedirect(route('projects.source-images.show', $project))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
         ->assertSessionHas('status', 'Исходники успешно загружены.');
 
     $project->refresh();
@@ -78,6 +169,134 @@ test('photographers can upload multiple source images to their project', functio
     foreach ($sourceImages as $sourceImage) {
         Storage::disk('public')->assertExists($sourceImage->path);
     }
+});
+
+test('photographers can upload non image source files to their project', function () {
+    Storage::fake('public');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+
+    $response = $this->actingAs($photographer)
+        ->post(route('projects.source-images.store', $project), [
+            'images' => [
+                UploadedFile::fake()->create(
+                    'source-layout.psd',
+                    512,
+                    'application/octet-stream',
+                ),
+            ],
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]));
+
+    $sourceFile = $project->sourceImages()->first();
+
+    expect($sourceFile)->not->toBeNull();
+    expect($sourceFile?->original_name)->toBe('source-layout.psd');
+    expect($sourceFile?->mime_type)->toStartWith('application/');
+    Storage::disk('public')->assertExists($sourceFile->path);
+});
+
+test('photographers can upload source files larger than the old ten megabyte limit', function () {
+    Storage::fake('public');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+
+    $response = $this->actingAs($photographer)
+        ->post(route('projects.source-images.store', $project), [
+            'images' => [
+                UploadedFile::fake()->create(
+                    'source-archive.zip',
+                    12 * 1024,
+                    'application/zip',
+                ),
+            ],
+        ]);
+
+    $response
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]));
+
+    $sourceFile = $project->sourceImages()->first();
+
+    expect($sourceFile)->not->toBeNull();
+    expect($sourceFile?->original_name)->toBe('source-archive.zip');
+    expect($sourceFile?->mime_type)->toBe('application/zip');
+    Storage::disk('public')->assertExists($sourceFile->path);
+});
+
+test('photographers can delete their own source images', function () {
+    Storage::fake('public');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+    $sourceImage = ProjectSourceImage::factory()->for($project)->create([
+        'path' => "project-source-images/{$project->id}/source-1.cr2",
+        'original_name' => 'source-1.CR2',
+        'mime_type' => 'image/x-canon-cr2',
+    ]);
+    $previewPath = ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id);
+
+    Storage::disk('public')->put($sourceImage->path, 'source-binary');
+    Storage::disk('public')->put($previewPath, 'preview-binary');
+
+    $this->actingAs($photographer)
+        ->delete(route('projects.source-images.destroy', [
+            'project' => $project,
+            'sourceImage' => $sourceImage,
+        ]))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
+        ->assertSessionHas('status', 'Исходник source-1.CR2 удален.');
+
+    expect($project->sourceImages()->whereKey($sourceImage->id)->exists())->toBeFalse();
+    Storage::disk('public')->assertMissing($sourceImage->path);
+    Storage::disk('public')->assertMissing($previewPath);
+});
+
+test('photographers can not delete source images from another photographers project', function () {
+    Storage::fake('public');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $anotherPhotographer = User::factory()->create();
+    $anotherPhotographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($anotherPhotographer, 'photographer')->create();
+    $sourceImage = ProjectSourceImage::factory()->for($project)->create([
+        'path' => "project-source-images/{$project->id}/source-1.jpg",
+    ]);
+
+    Storage::disk('public')->put($sourceImage->path, 'source-binary');
+
+    $this->actingAs($photographer)
+        ->delete(route('projects.source-images.destroy', [
+            'project' => $project,
+            'sourceImage' => $sourceImage,
+        ]))
+        ->assertNotFound();
+
+    expect($project->sourceImages()->whereKey($sourceImage->id)->exists())->toBeTrue();
+    Storage::disk('public')->assertExists($sourceImage->path);
 });
 
 test('photographers can move project to photographer shot stage after confirming source images', function () {
@@ -97,7 +316,10 @@ test('photographers can move project to photographer shot stage after confirming
         ->post(route('projects.source-images.complete', $project));
 
     $response
-        ->assertRedirect(route('projects.source-images.show', $project))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
         ->assertSessionHas('status', 'Проект переведен на этап "Фотограф снял".');
 
     $project->refresh();
@@ -139,6 +361,16 @@ test('legacy projects still allow confirming source images when the old active s
 
     $this->actingAs($photographer)
         ->get(route('projects.source-images.show', $project))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]));
+
+    $this->actingAs($photographer)
+        ->get(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('workflow.canMarkReady', true)
@@ -147,7 +379,10 @@ test('legacy projects still allow confirming source images when the old active s
 
     $this->actingAs($photographer)
         ->post(route('projects.source-images.complete', $project))
-        ->assertRedirect(route('projects.source-images.show', $project))
+        ->assertRedirect(route('projects.show', [
+            'project' => $project,
+            'tab' => 'source-images',
+        ]))
         ->assertSessionHas('status', 'Проект переведен на этап "Фотограф снял".');
 
     $project->refresh();

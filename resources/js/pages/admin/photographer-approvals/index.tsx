@@ -1,6 +1,17 @@
-import { Form, Head } from '@inertiajs/react';
-import { CheckCircle2, Clock3, Phone, UserRound } from 'lucide-react';
-import { approve, index as photographerApprovalIndex } from '@/actions/App/Http/Controllers/Admin/PhotographerApprovalController';
+import { Form, Head, useForm } from '@inertiajs/react';
+import {
+    CheckCircle2,
+    Clock3,
+    ExternalLink,
+    Phone,
+    Trash2,
+    UserRound,
+} from 'lucide-react';
+import {
+    approve,
+    destroy as destroyPhotographer,
+    index as photographerApprovalIndex,
+} from '@/actions/App/Http/Controllers/Admin/PhotographerApprovalController';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -8,6 +19,7 @@ type PendingPhotographer = {
     id: number;
     name: string;
     phone: string;
+    instagramUrl: string | null;
     registeredAt: string | null;
 };
 
@@ -28,20 +40,22 @@ export default function PhotographerApprovalsIndex({
     pendingPhotographers,
     status,
 }: Props) {
+    const deleteForm = useForm({});
+
     return (
         <>
             <Head title="Подтверждение фотографов" />
 
-            <div className="flex w-full flex-col gap-6 p-6 md:p-10">
+            <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4">
                 <div className="flex flex-col gap-4">
                     <div>
-                        <h1 className="text-[28px] font-semibold tracking-tight text-white mb-2">
+                        <h1 className="mb-2 text-[28px] font-semibold text-white">
                             Подтверждение фотографов
                         </h1>
                         <p className="max-w-2xl text-sm leading-relaxed text-[#A1A1AA]">
                             Здесь появляются новые фотографы после регистрации.
-                            Пока аккаунт не будет подтвержден, вход в
-                            систему для них закрыт.
+                            Пока аккаунт не будет подтвержден, вход в систему
+                            для них закрыт.
                         </p>
                     </div>
                 </div>
@@ -52,10 +66,10 @@ export default function PhotographerApprovalsIndex({
                     </div>
                 )}
 
-                <Card className="mt-2 border-white/5 bg-[#0f0f11] shadow-xl rounded-2xl">
+                <Card className="mt-2 rounded-2xl border-white/5 bg-slate-900/55 shadow-xl backdrop-blur-sm">
                     <CardHeader className="flex flex-row items-center justify-between gap-4 pb-4">
                         <div>
-                            <CardTitle className="text-xl font-medium text-white mb-1.5">
+                            <CardTitle className="mb-1.5 text-xl font-medium text-white">
                                 Ожидают подтверждения
                             </CardTitle>
                             <p className="text-sm text-[#A1A1AA]">
@@ -68,7 +82,7 @@ export default function PhotographerApprovalsIndex({
 
                     <CardContent className="space-y-4 pt-0">
                         {pendingPhotographers.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-white/10 bg-black/40 px-6 py-14 text-center">
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/45 px-6 py-14 text-center">
                                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5">
                                     <CheckCircle2 className="h-6 w-6 text-emerald-400" />
                                 </div>
@@ -84,10 +98,10 @@ export default function PhotographerApprovalsIndex({
                             pendingPhotographers.map((photographer) => (
                                 <div
                                     key={photographer.id}
-                                    className="flex flex-col gap-6 rounded-2xl border border-white/5 bg-[#141417] p-5 lg:flex-row lg:items-center lg:justify-between"
+                                    className="flex flex-col gap-6 rounded-2xl border border-white/5 bg-slate-900/35 p-5 lg:flex-row lg:items-center lg:justify-between"
                                 >
                                     <div className="flex gap-4">
-                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FF7B00]/10 text-[#FF7B00]">
+                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-300">
                                             <UserRound className="h-5 w-5" />
                                         </div>
                                         <div className="flex flex-col justify-center gap-3">
@@ -103,11 +117,11 @@ export default function PhotographerApprovalsIndex({
 
                                             <div className="flex flex-col gap-3 text-sm text-[#A1A1AA] sm:flex-row sm:items-center sm:gap-6">
                                                 <span className="inline-flex items-center gap-2">
-                                                    <Phone className="h-4 w-4 text-[#FF7B00]" />
+                                                    <Phone className="h-4 w-4 text-emerald-300" />
                                                     {photographer.phone}
                                                 </span>
                                                 <span className="inline-flex items-center gap-2">
-                                                    <Clock3 className="h-4 w-4 text-[#FF7B00]" />
+                                                    <Clock3 className="h-4 w-4 text-emerald-300" />
                                                     {formatRegisteredAt(
                                                         photographer.registeredAt,
                                                     )}
@@ -116,22 +130,76 @@ export default function PhotographerApprovalsIndex({
                                         </div>
                                     </div>
 
-                                    <Form
-                                        {...approve.form(photographer.id)}
-                                        className="lg:min-w-48"
-                                    >
-                                        {({ processing }) => (
+                                    <div className="flex flex-col gap-3 lg:min-w-64">
+                                        <Form
+                                            action={approve(photographer.id)}
+                                        >
+                                            {({ processing }) => (
+                                                <Button
+                                                    type="submit"
+                                                    disabled={
+                                                        processing ||
+                                                        deleteForm.processing
+                                                    }
+                                                    className="w-full rounded-full bg-emerald-500 font-medium text-white hover:bg-emerald-600"
+                                                >
+                                                    {processing
+                                                        ? 'Подтверждение...'
+                                                        : 'Подтвердить фотографа'}
+                                                </Button>
+                                            )}
+                                        </Form>
+
+                                        {photographer.instagramUrl && (
                                             <Button
-                                                type="submit"
-                                                disabled={processing}
-                                                className="w-full rounded-full bg-[#FF7B00] hover:bg-[#FF7B00]/90 text-white font-medium"
+                                                asChild
+                                                type="button"
+                                                variant="outline"
+                                                className="w-full rounded-full border-cyan-500/20 bg-cyan-500/10 font-medium text-cyan-200 hover:bg-cyan-500/20 hover:text-cyan-100"
                                             >
-                                                {processing
-                                                    ? 'Подтверждение...'
-                                                    : 'Подтвердить фотографа'}
+                                                <a
+                                                    href={
+                                                        photographer.instagramUrl
+                                                    }
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                                    Перейти в Instagram
+                                                </a>
                                             </Button>
                                         )}
-                                    </Form>
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={deleteForm.processing}
+                                            className="w-full rounded-full border-red-500/20 bg-transparent font-medium text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                                            onClick={() => {
+                                                if (
+                                                    !window.confirm(
+                                                        `Удалить фотографа ${photographer.name}?`,
+                                                    )
+                                                ) {
+                                                    return;
+                                                }
+
+                                                deleteForm.delete(
+                                                    destroyPhotographer.url(
+                                                        photographer.id,
+                                                    ),
+                                                    {
+                                                        preserveScroll: true,
+                                                    },
+                                                );
+                                            }}
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            {deleteForm.processing
+                                                ? 'Удаление...'
+                                                : 'Удалить фотографа'}
+                                        </Button>
+                                    </div>
                                 </div>
                             ))
                         )}

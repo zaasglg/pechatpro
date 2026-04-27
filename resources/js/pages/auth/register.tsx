@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -16,6 +16,7 @@ import { Input, inputStyles } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Spinner } from '@/components/ui/spinner';
+import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
@@ -36,21 +37,28 @@ export default function Register({
     registrationPendingApproval = false,
     registrationPendingApprovalToken = null,
 }: Props) {
+    const { t } = useTranslations();
+
+    setLayoutProps({
+        title: t('auth.register.layout_title'),
+        description: t('auth.register.layout_description'),
+    });
+
     return (
         <>
-            <Head title="Регистрация фотографа" />
+            <Head title={t('auth.register.meta_title')} />
             <Form
-                {...store.form()}
+                action={store()}
                 resetOnSuccess={['password', 'password_confirmation']}
                 disableWhileProcessing
-                className="flex flex-col gap-6"
+                className="flex flex-col gap-4"
             >
                 {({ processing, errors }) => (
                     <>
-                        <div className="grid gap-6">
+                        <div className="grid gap-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="name" className="text-zinc-300">
-                                    Имя и фамилия
+                                    {t('auth.register.name_label')}
                                 </Label>
                                 <Input
                                     id="name"
@@ -58,8 +66,10 @@ export default function Register({
                                     required
                                     autoComplete="name"
                                     name="name"
-                                    placeholder="Иван Иванов"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.register.name_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError
                                     message={errors.name}
@@ -72,15 +82,17 @@ export default function Register({
                                     htmlFor="phone"
                                     className="text-zinc-300"
                                 >
-                                    Номер телефона
+                                    {t('auth.register.phone_label')}
                                 </Label>
                                 <PhoneInput
                                     id="phone"
                                     required
                                     autoComplete="tel"
                                     name="phone"
-                                    placeholder="+7 701 123 45 67"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.register.phone_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError
                                     message={errors.phone}
@@ -93,16 +105,17 @@ export default function Register({
                                     htmlFor="instagram_url"
                                     className="text-zinc-300"
                                 >
-                                    Ссылка на Instagram
+                                    {t('auth.register.instagram_label')}
                                 </Label>
                                 <Input
                                     id="instagram_url"
                                     type="url"
-                                    required
                                     autoComplete="url"
                                     name="instagram_url"
-                                    placeholder="https://instagram.com/vash_profil"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.register.instagram_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError
                                     message={errors.instagram_url}
@@ -111,8 +124,11 @@ export default function Register({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="city_id" className="text-zinc-300">
-                                    Город
+                                <Label
+                                    htmlFor="city_id"
+                                    className="text-zinc-300"
+                                >
+                                    {t('auth.register.city_label')}
                                 </Label>
                                 <select
                                     id="city_id"
@@ -121,10 +137,12 @@ export default function Register({
                                     defaultValue=""
                                     className={cn(
                                         inputStyles,
-                                        'border-white/10 bg-zinc-950/50 text-white focus-visible:ring-orange-500',
+                                        'border-slate-400/10 bg-slate-950/60 text-white focus-visible:ring-emerald-500',
                                     )}
                                 >
-                                    <option value="">Выберите город</option>
+                                    <option value="">
+                                        {t('auth.register.city_placeholder')}
+                                    </option>
                                     {cities.map((city) => (
                                         <option key={city.id} value={city.id}>
                                             {city.name}
@@ -142,15 +160,17 @@ export default function Register({
                                     htmlFor="password"
                                     className="text-zinc-300"
                                 >
-                                    Пароль
+                                    {t('auth.register.password_label')}
                                 </Label>
                                 <PasswordInput
                                     id="password"
                                     required
                                     autoComplete="new-password"
                                     name="password"
-                                    placeholder="Минимум 8 символов"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.register.password_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError
                                     message={errors.password}
@@ -163,15 +183,19 @@ export default function Register({
                                     htmlFor="password_confirmation"
                                     className="text-zinc-300"
                                 >
-                                    Подтверждение пароля
+                                    {t(
+                                        'auth.register.password_confirmation_label',
+                                    )}
                                 </Label>
                                 <PasswordInput
                                     id="password_confirmation"
                                     required
                                     autoComplete="new-password"
                                     name="password_confirmation"
-                                    placeholder="Повторите пароль"
-                                    className="border-white/10 bg-zinc-950/50 text-white placeholder:text-zinc-600 focus-visible:ring-orange-500"
+                                    placeholder={t(
+                                        'auth.register.password_confirmation_placeholder',
+                                    )}
+                                    className="border-slate-400/10 bg-slate-950/60 text-white placeholder:text-zinc-500 focus-visible:ring-emerald-500"
                                 />
                                 <InputError
                                     message={errors.password_confirmation}
@@ -181,50 +205,60 @@ export default function Register({
 
                             <Button
                                 type="submit"
-                                className="mt-2 h-11 w-full bg-orange-500 text-base font-medium text-white shadow-lg shadow-orange-500/25 transition-all hover:scale-[1.02] hover:bg-orange-600"
+                                className="mt-1 h-11 w-full bg-emerald-500 text-base font-medium text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] hover:bg-emerald-600"
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}
-                                Начать сотрудничество
+                                {t('auth.register.submit')}
                             </Button>
                         </div>
 
-                        <div className="mt-2 text-center text-sm text-zinc-400">
-                            Уже есть аккаунт?{' '}
+                        <div className="mt-1 text-center text-sm text-zinc-400">
+                            {t('auth.register.has_account')}{' '}
                             <TextLink
                                 href={login()}
-                                className="font-medium text-orange-400 transition-colors hover:text-orange-500"
+                                className="font-medium text-emerald-400 transition-colors hover:text-emerald-300"
                             >
-                                Войти
+                                {t('auth.register.login')}
                             </TextLink>
                         </div>
                     </>
                 )}
             </Form>
 
-            {registrationPendingApproval && registrationPendingApprovalToken && (
-                <RegistrationPendingApprovalModal
-                    key={registrationPendingApprovalToken}
-                />
-            )}
+            {registrationPendingApproval &&
+                registrationPendingApprovalToken && (
+                    <RegistrationPendingApprovalModal
+                        key={registrationPendingApprovalToken}
+                        title={t('auth.register.pending_title')}
+                        description={t('auth.register.pending_description')}
+                        closeLabel={t('auth.register.pending_close')}
+                    />
+                )}
         </>
     );
 }
 
-function RegistrationPendingApprovalModal() {
+function RegistrationPendingApprovalModal({
+    title,
+    description,
+    closeLabel,
+}: {
+    title: string;
+    description: string;
+    closeLabel: string;
+}) {
     const [isOpen, setIsOpen] = useState(true);
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="border border-orange-500/20 bg-[#090909] text-white shadow-2xl sm:max-w-lg">
+            <DialogContent className="border border-emerald-500/20 bg-[#111827] text-white shadow-2xl sm:max-w-lg">
                 <DialogHeader className="text-center">
                     <DialogTitle className="text-2xl font-semibold text-white">
-                        Заявка отправлена
+                        {title}
                     </DialogTitle>
                     <DialogDescription className="text-base leading-relaxed text-zinc-400">
-                        Ждите подтверждения аккаунта. Мы свяжемся с вами после
-                        проверки и сообщим, когда вход в систему станет
-                        доступен.
+                        {description}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -232,18 +266,12 @@ function RegistrationPendingApprovalModal() {
                     <Button
                         type="button"
                         onClick={() => setIsOpen(false)}
-                        className="bg-orange-500 text-white hover:bg-orange-600"
+                        className="bg-emerald-500 text-white hover:bg-emerald-600"
                     >
-                        Понятно
+                        {closeLabel}
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
-
-Register.layout = {
-    title: 'Регистрация',
-    description:
-        'Создайте аккаунт, укажите телефон, Instagram и город, чтобы начать сотрудничество',
-};

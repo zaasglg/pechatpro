@@ -1,8 +1,19 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BarChart3, Folder, MapPinned, Printer, ShieldCheck, WandSparkles } from 'lucide-react';
+import {
+    BarChart3,
+    Calculator,
+    Folder,
+    MapPinned,
+    Printer,
+    ShieldCheck,
+    Users,
+    WandSparkles,
+} from 'lucide-react';
 import { index as cityIndex } from '@/actions/App/Http/Controllers/Admin/CityController';
 import { index as moderatorProjectIndex } from '@/actions/App/Http/Controllers/Admin/ModeratorProjectController';
 import { index as photographerApprovalIndex } from '@/actions/App/Http/Controllers/Admin/PhotographerApprovalController';
+import { index as projectPriceIndex } from '@/actions/App/Http/Controllers/Admin/ProjectPriceController';
+import { index as adminUsersIndex } from '@/actions/App/Http/Controllers/Admin/UserController';
 import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
 import { index as projectIndex } from '@/actions/App/Http/Controllers/PhotographerProjectController';
 import { index as printProjectIndex } from '@/actions/App/Http/Controllers/PrintProjectController';
@@ -52,10 +63,28 @@ export function AppSidebar() {
                   } satisfies NavItem,
               ]
             : []),
+        ...(auth.user?.canManageProjectPrices
+            ? [
+                  {
+                      title: 'Правила цен',
+                      href: projectPriceIndex(),
+                      icon: Calculator,
+                  } satisfies NavItem,
+              ]
+            : []),
+        ...(auth.user?.canManageUsers
+            ? [
+                  {
+                      title: 'Пользователи',
+                      href: adminUsersIndex(),
+                      icon: Users,
+                  } satisfies NavItem,
+              ]
+            : []),
         ...(auth.user?.canModerateProjects
             ? [
                   {
-                      title: 'Проекты модератора',
+                      title: 'Проекты',
                       href: moderatorProjectIndex(),
                       icon: ShieldCheck,
                   } satisfies NavItem,
@@ -82,11 +111,19 @@ export function AppSidebar() {
     ];
 
     return (
-        <Sidebar collapsible="icon" variant="sidebar" className="border-none bg-transparent">
+        <Sidebar
+            collapsible="icon"
+            variant="sidebar"
+            className="border-none bg-transparent"
+        >
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild className="hover:bg-white/5 data-[state=open]:bg-white/5 transition-colors">
+                        <SidebarMenuButton
+                            size="lg"
+                            asChild
+                            className="transition-colors hover:bg-white/5 data-[state=open]:bg-white/5"
+                        >
                             <Link href={dashboard()} prefetch>
                                 <AppLogo />
                             </Link>

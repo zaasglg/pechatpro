@@ -6,6 +6,7 @@ use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
 use App\Models\User;
 use App\Support\PhoneNumber;
+use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
@@ -29,7 +30,7 @@ class CreateNewUser implements CreatesNewUsers
 
         Validator::make($input, [
             ...$this->profileRules(),
-            'instagram_url' => $this->instagramUrlRules(),
+            'instagram_url' => $this->registrationInstagramUrlRules(),
             'password' => $this->passwordRules(),
         ])->validate();
 
@@ -48,8 +49,26 @@ class CreateNewUser implements CreatesNewUsers
         });
     }
 
-    private function normalizeInstagramUrl(?string $instagramUrl): string
+    /**
+     * Get the validation rules used during registration for Instagram profile links.
+     *
+     * @return array<int, \Closure|Rule|array<mixed>|string>
+     */
+    private function registrationInstagramUrlRules(): array
     {
-        return rtrim(trim((string) $instagramUrl), '/');
+        return [
+            'nullable',
+            ...array_values(array_filter(
+                $this->instagramUrlRules(),
+                static fn (mixed $rule): bool => $rule !== 'required',
+            )),
+        ];
+    }
+
+    private function normalizeInstagramUrl(?string $instagramUrl): ?string
+    {
+        $normalizedInstagramUrl = rtrim(trim((string) $instagramUrl), '/');
+
+        return $normalizedInstagramUrl !== '' ? $normalizedInstagramUrl : null;
     }
 }

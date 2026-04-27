@@ -1,13 +1,35 @@
 import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, ImagePlus, Upload, WandSparkles } from 'lucide-react';
+import {
+    ArrowLeft,
+    CheckCircle2,
+    Download,
+    File,
+    ImagePlus,
+    Upload,
+    WandSparkles,
+} from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
-import { complete as completeMontageWorks, replace as replaceMontageWork, show as showMontageWorks, store as storeMontageWorks } from '@/actions/App/Http/Controllers/ProjectMontageAssetController';
+import {
+    complete as completeMontageWorks,
+    replace as replaceMontageWork,
+    show as showMontageWorks,
+    store as storeMontageWorks,
+} from '@/actions/App/Http/Controllers/ProjectMontageAssetController';
+import {
+    montageArchive as downloadMontageArchive,
+    montageDownload as downloadMontageWork,
+} from '@/actions/App/Http/Controllers/ProjectMontageDownloadController';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type ProjectSummary = {
@@ -24,7 +46,9 @@ type MontageAssetItem = {
     id: number;
     name: string;
     url: string;
+    previewUrl: string | null;
     sizeBytes: number;
+    mimeType: string | null;
     uploadedAt: string | null;
     requestedForRevision: boolean;
 };
@@ -47,9 +71,15 @@ type ReplaceMontageAssetForm = {
 type Props = {
     project: ProjectSummary;
     montageAssets: MontageAssetItem[];
+    clientSelection: {
+        selectedImagesCount: number;
+        archiveUrl: string;
+        archiveAvailable: boolean;
+    };
     workflow: {
         currentStageName: string | null;
         currentStageSlug: string | null;
+        assignedRole: 'montage' | 'designer';
         canMarkReady: boolean;
     };
     clientReview: {
@@ -66,14 +96,24 @@ type Props = {
 export default function MontageProjectWorks({
     project,
     montageAssets,
+    clientSelection,
     workflow,
     clientReview,
     status,
 }: Props) {
+    const isDesignerWorkspace = workflow.assignedRole === 'designer';
+    const workspaceTitle = isDesignerWorkspace ? 'Дизайн' : 'Монтаж';
+    const completionLabel = isDesignerWorkspace
+        ? 'Отправить дизайн модератору'
+        : 'Передать модератору';
+    const clientSelectionArchiveLabel = isDesignerWorkspace
+        ? 'Скачать работы монтажёра'
+        : `Скачать выбор клиента (${clientSelection.selectedImagesCount})`;
+
     setLayoutProps({
         breadcrumbs: [
             {
-                title: 'Монтаж',
+                title: workspaceTitle,
                 href: montageProjectIndex(),
             },
             {
@@ -87,14 +127,24 @@ export default function MontageProjectWorks({
     const replaceFileInputRef = useRef<HTMLInputElement | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [uploadTick, setUploadTick] = useState(0);
-    const [activeImage, setActiveImage] = useState<MontageAssetItem | null>(null);
-    const [selectedPreviews, setSelectedPreviews] = useState<SelectedImagePreview[]>([]);
+    const [activeImage, setActiveImage] = useState<MontageAssetItem | null>(
+        null,
+    );
+    const [selectedPreviews, setSelectedPreviews] = useState<
+        SelectedImagePreview[]
+    >([]);
     const completeStageForm = useForm<Record<string, never>>({});
     const replaceForm = useForm<ReplaceMontageAssetForm>({
         image: null,
     });
     const revisionCommentsByAssetId = useMemo(
-        () => new Map(clientReview.requestedAssets.map((asset) => [asset.id, asset.comment])),
+        () =>
+            new Map(
+                clientReview.requestedAssets.map((asset) => [
+                    asset.id,
+                    asset.comment,
+                ]),
+            ),
         [clientReview.requestedAssets],
     );
     const {
@@ -174,7 +224,11 @@ export default function MontageProjectWorks({
     };
 
     const openFilePicker = () => {
-        if (processing || completeStageForm.processing || workflow.currentStageSlug !== 'montage') {
+        if (
+            processing ||
+            completeStageForm.processing ||
+            workflow.currentStageSlug !== 'montage'
+        ) {
             return;
         }
 
@@ -183,10 +237,10 @@ export default function MontageProjectWorks({
 
     const openReplaceFilePicker = () => {
         if (
-            activeImage === null
-            || !activeImage.requestedForRevision
-            || replaceForm.processing
-            || workflow.currentStageSlug !== 'montage'
+            activeImage === null ||
+            !activeImage.requestedForRevision ||
+            replaceForm.processing ||
+            workflow.currentStageSlug !== 'montage'
         ) {
             return;
         }
@@ -207,11 +261,14 @@ export default function MontageProjectWorks({
     const imageErrors = Object.entries(errors)
         .filter(([key]) => key.startsWith('images.'))
         .map(([, value]) => value);
-    const activeImageComment = activeImage === null
-        ? null
-        : revisionCommentsByAssetId.get(activeImage.id) ?? null;
+    const activeImageComment =
+        activeImage === null
+            ? null
+            : (revisionCommentsByAssetId.get(activeImage.id) ?? null);
 
-    const handleReplaceFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const handleReplaceFileSelection = (
+        event: ChangeEvent<HTMLInputElement>,
+    ) => {
         const file = event.target.files?.[0] ?? null;
 
         if (file === null || activeImage === null) {
@@ -242,9 +299,9 @@ export default function MontageProjectWorks({
 
     return (
         <>
-            <Head title={`Монтаж | ${project.name}`} />
+            <Head title={`${workspaceTitle} | ${project.name}`} />
 
-            <div className="flex w-full flex-col gap-6 p-4 md:p-8">
+            <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <Link
                         href={montageProjectIndex()}
@@ -255,23 +312,63 @@ export default function MontageProjectWorks({
                         Назад
                     </Link>
 
-                    <Button
-                        type="button"
-                        size="lg"
-                        disabled={processing || completeStageForm.processing || workflow.currentStageSlug !== 'montage'}
-                        className="bg-orange-500 px-5 text-white hover:bg-orange-600"
-                        onClick={openFilePicker}
-                    >
-                        <ImagePlus className="mr-2 h-4 w-4" />
-                        Добавить готовые работы
-                    </Button>
+                    <div className="flex flex-wrap gap-3">
+                        {clientSelection.archiveAvailable && (
+                            <Button
+                                asChild
+                                type="button"
+                                variant="outline"
+                                className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                            >
+                                <a href={clientSelection.archiveUrl}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    {clientSelectionArchiveLabel}
+                                </a>
+                            </Button>
+                        )}
+
+                        {montageAssets.length > 0 && !isDesignerWorkspace && (
+                            <Button
+                                asChild
+                                type="button"
+                                variant="outline"
+                                className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                            >
+                                <a
+                                    href={downloadMontageArchive.url(
+                                        project.id,
+                                    )}
+                                >
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Скачать архив
+                                </a>
+                            </Button>
+                        )}
+
+                        <Button
+                            type="button"
+                            size="lg"
+                            disabled={
+                                processing ||
+                                completeStageForm.processing ||
+                                workflow.currentStageSlug !== 'montage'
+                            }
+                            className="bg-emerald-500 px-5 text-white hover:bg-emerald-600"
+                            onClick={openFilePicker}
+                        >
+                            <ImagePlus className="mr-2 h-4 w-4" />
+                            {isDesignerWorkspace
+                                ? 'Добавить дизайны'
+                                : 'Добавить готовые работы'}
+                        </Button>
+                    </div>
                 </div>
 
                 <input
                     ref={fileInputRef}
                     type="file"
                     name="images"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.avif,.heic,.heif,.tif,.tiff,.raf,.arw,.cr2,.cr3,.dng,.nef,.nrw,.orf,.pef,.rw2,.sr2,.srf,.srw,.x3f"
                     multiple
                     className="hidden"
                     onChange={handleFileSelection}
@@ -280,7 +377,7 @@ export default function MontageProjectWorks({
                     ref={replaceFileInputRef}
                     type="file"
                     name="image"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.svg,.avif,.heic,.heif,.tif,.tiff,.raf,.arw,.cr2,.cr3,.dng,.nef,.nrw,.orf,.pef,.rw2,.sr2,.srf,.srw,.x3f"
                     className="hidden"
                     onChange={handleReplaceFileSelection}
                 />
@@ -290,7 +387,7 @@ export default function MontageProjectWorks({
                         <div className="flex flex-wrap items-center gap-2">
                             <Badge
                                 variant="outline"
-                                className="border-orange-500/20 bg-orange-500/10 text-orange-200"
+                                className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
                             >
                                 {project.className}
                             </Badge>
@@ -310,32 +407,45 @@ export default function MontageProjectWorks({
 
                         <div className="flex flex-wrap items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                                <h1 className="text-3xl font-semibold text-white">
                                     {project.name}
                                 </h1>
                                 <p className="mt-2 text-sm text-zinc-500">
-                                    Фотограф: {project.photographerName ?? 'Не указан'}
+                                    Фотограф:{' '}
+                                    {project.photographerName ?? 'Не указан'}
                                 </p>
                                 <p className="mt-1 text-sm text-zinc-500">
-                                    Этап: {workflow.currentStageName ?? 'Неизвестно'}
+                                    Этап:{' '}
+                                    {isDesignerWorkspace
+                                        ? 'Дизайн виньеток'
+                                        : (workflow.currentStageName ??
+                                          'Неизвестно')}
                                 </p>
                             </div>
 
                             {workflow.canMarkReady && (
                                 <Button
                                     type="button"
-                                    disabled={completeStageForm.processing || montageAssets.length === 0}
-                                    className="bg-white/10 text-white hover:bg-white/15"
+                                    disabled={
+                                        completeStageForm.processing ||
+                                        montageAssets.length === 0
+                                    }
+                                    className="bg-emerald-500 text-white hover:bg-emerald-600"
                                     onClick={() => {
-                                        completeStageForm.post(completeMontageWorks.url(project.id), {
-                                            preserveScroll: true,
-                                        });
+                                        completeStageForm.post(
+                                            completeMontageWorks.url(
+                                                project.id,
+                                            ),
+                                            {
+                                                preserveScroll: true,
+                                            },
+                                        );
                                     }}
-                                >
-                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                    Отправить модератору
-                                </Button>
-                            )}
+                                    >
+                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                        {completionLabel}
+                                    </Button>
+                                )}
                         </div>
                     </div>
 
@@ -360,23 +470,24 @@ export default function MontageProjectWorks({
                     {imageErrors.length > 0 && (
                         <div className="mt-4 space-y-2">
                             {imageErrors.map((message, index) => (
-                                <InputError key={`${message}-${index}`} message={message} />
+                                <InputError
+                                    key={`${message}-${index}`}
+                                    message={message}
+                                />
                             ))}
                         </div>
                     )}
 
-
-
-                    <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-6 space-y-4">
                         <div
                             role="button"
                             tabIndex={0}
                             aria-label="Выбрать готовые работы"
                             className={cn(
-                                'flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border border-dashed px-6 py-10 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+                                'flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border border-dashed px-6 py-10 text-center transition-colors focus-visible:ring-2 focus-visible:ring-emerald-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black focus-visible:outline-none',
                                 isDragging
-                                    ? 'border-orange-500 bg-orange-500/10'
-                                    : 'border-white/10 bg-white/[0.02]',
+                                    ? 'border-emerald-500 bg-emerald-500/10'
+                                    : 'border-white/10 bg-slate-900/35',
                             )}
                             onClick={openFilePicker}
                             onKeyDown={handleDropzoneKeyDown}
@@ -387,23 +498,31 @@ export default function MontageProjectWorks({
                             onDragLeave={() => setIsDragging(false)}
                             onDrop={(event) => {
                                 event.preventDefault();
-                                queueImages(Array.from(event.dataTransfer.files));
+                                queueImages(
+                                    Array.from(event.dataTransfer.files),
+                                );
                             }}
                         >
-                            <div className="rounded-full bg-orange-500/10 p-3 text-orange-300">
+                            <div className="rounded-full bg-emerald-500/10 p-3 text-emerald-300">
                                 <Upload className="h-6 w-6" />
                             </div>
                             <p className="mt-4 text-base font-medium text-white">
-                                Перетащите готовые работы сюда
+                                {isDesignerWorkspace
+                                    ? 'Перетащите готовые дизайны сюда'
+                                    : 'Перетащите готовые работы сюда'}
                             </p>
                             <p className="mt-2 max-w-xs text-sm text-zinc-500">
-                                Поддерживаются JPG, PNG и WEBP до 10 МБ за файл.
+                                Поддерживаются JPG, PNG, WEBP, SVG и RAW-форматы (RAF, CR2, CR3, DNG, NEF и другие) до 50 МБ за файл.
                             </p>
                             <Button
                                 type="button"
                                 variant="outline"
                                 className="mt-5 border-white/10 bg-white/5 text-white hover:bg-white/10"
-                                disabled={processing || completeStageForm.processing || workflow.currentStageSlug !== 'montage'}
+                                disabled={
+                                    processing ||
+                                    completeStageForm.processing ||
+                                    workflow.currentStageSlug !== 'montage'
+                                }
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     openFilePicker();
@@ -412,106 +531,172 @@ export default function MontageProjectWorks({
                                 <ImagePlus className="mr-2 h-4 w-4" />
                                 Выбрать файлы
                             </Button>
+
+                            {isDesignerWorkspace && montageAssets.length > 0 && (
+                                <p className="mt-4 text-xs text-zinc-500">
+                                    Загружено файлов: {montageAssets.length}
+                                </p>
+                            )}
                         </div>
 
-                        {montageAssets.map((asset) => (
-                            <button
-                                key={asset.id}
-                                type="button"
-                                className="group overflow-hidden rounded-[1.5rem] border border-white/6 bg-white/[0.03] text-left transition hover:border-orange-500/30"
-                                onClick={() => setActiveImage(asset)}
-                            >
-                                <div className="relative aspect-[4/3] overflow-hidden bg-black/40">
-                                    <img
-                                        src={asset.url}
-                                        alt={asset.name}
-                                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                                    />
-                                    {asset.requestedForRevision && (
-                                        <div className="pointer-events-none absolute left-3 top-3">
-                                            <span className="rounded-full bg-orange-500 px-3 py-1 text-xs font-medium text-white shadow-lg shadow-orange-500/20">
-                                                Нужна правка
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="space-y-2 p-4">
-                                    <p className="line-clamp-2 text-sm font-medium text-white">
-                                        {asset.name}
-                                    </p>
-                                    <p className="text-xs text-zinc-500">
-                                        {formatBytes(asset.sizeBytes)}
-                                    </p>
-                                </div>
-                            </button>
-                        ))}
+                        {montageAssets.length > 0 && (
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
+                                {montageAssets.map((asset) => {
+                                    const thumbSrc =
+                                        asset.previewUrl ??
+                                        (canRenderImagePreview(asset.name, asset.mimeType)
+                                            ? asset.url
+                                            : null);
+
+                                    return (
+                                        <button
+                                            key={asset.id}
+                                            type="button"
+                                            title={`${asset.name} · ${formatBytes(asset.sizeBytes)}`}
+                                            className="group relative aspect-square overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 text-left transition hover:border-emerald-500/40"
+                                            onClick={() => setActiveImage(asset)}
+                                        >
+                                            {thumbSrc ? (
+                                                <img
+                                                    src={thumbSrc}
+                                                    alt={asset.name}
+                                                    loading="lazy"
+                                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400">
+                                                    <File className="h-6 w-6" />
+                                                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase">
+                                                        {getFileTypeLabel(asset.name, asset.mimeType)}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {asset.requestedForRevision && (
+                                                <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
+                                                    Правка
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     {progress && (
-                        <div className="mt-4 rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                        <div className="mt-4 rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-3 text-sm text-zinc-300">
                             Загрузка: {progress.percentage}%
                         </div>
                     )}
 
                     {montageAssets.length === 0 && (
-                        <div className="mt-6 rounded-[1.5rem] border border-white/6 bg-white/[0.02] px-6 py-10 text-center">
-                            <div className="mx-auto w-fit rounded-full bg-orange-500/10 p-3 text-orange-300">
+                        <div className="mt-6 rounded-[1.5rem] border border-white/6 bg-slate-900/35 px-6 py-10 text-center">
+                            <div className="mx-auto w-fit rounded-full bg-emerald-500/10 p-3 text-emerald-300">
                                 <WandSparkles className="h-6 w-6" />
                             </div>
                             <h2 className="mt-4 text-lg font-semibold text-white">
-                                Готовые работы еще не загружены
+                                {isDesignerWorkspace
+                                    ? 'Дизайны ещё не загружены'
+                                    : 'Готовые работы еще не загружены'}
                             </h2>
                             <p className="mt-2 text-sm text-zinc-500">
-                                Загрузите результат монтажа и затем отправьте проект
-                                модератору.
+                                {isDesignerWorkspace
+                                    ? 'Загрузите дизайн виньеток и затем отправьте проект модератору.'
+                                    : 'Загрузите результат монтажа и затем передайте проект дизайнеру через модератора.'}
                             </p>
                         </div>
                     )}
                 </section>
             </div>
 
-            <Dialog open={activeImage !== null} onOpenChange={(open) => !open && setActiveImage(null)}>
-                <DialogContent className="max-w-4xl border-white/10 bg-zinc-950 text-white">
+            <Dialog
+                open={activeImage !== null}
+                onOpenChange={(open) => !open && setActiveImage(null)}
+            >
+                <DialogContent className="max-w-4xl border-white/10 bg-slate-950 text-white">
                     <DialogTitle>{activeImage?.name ?? 'Превью'}</DialogTitle>
                     <DialogDescription className="text-zinc-400">
-                        Просмотр загруженной готовой работы и замечаний клиента по этому файлу.
+                        Просмотр загруженного файла и замечаний клиента по
+                        этому результату.
                     </DialogDescription>
 
                     {activeImage && (
                         <div className="space-y-4">
-                            <img
-                                src={activeImage.url}
-                                alt={activeImage.name}
-                                className="mt-2 max-h-[75vh] w-full rounded-2xl object-contain"
-                            />
+                            {activeImage.previewUrl ||
+                            canRenderImagePreview(
+                                activeImage.name,
+                                activeImage.mimeType,
+                            ) ? (
+                                <img
+                                    src={activeImage.previewUrl ?? activeImage.url}
+                                    alt={activeImage.name}
+                                    className="mt-2 max-h-[75vh] w-full rounded-2xl object-contain"
+                                />
+                            ) : (
+                                <div className="mt-2 flex min-h-[320px] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-white/10 bg-slate-900/45 text-zinc-300">
+                                    <File className="h-14 w-14 text-zinc-400" />
+                                    <p className="text-sm text-zinc-400">
+                                        Для этого формата превью недоступно.
+                                    </p>
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase text-zinc-300">
+                                        {getFileTypeLabel(
+                                            activeImage.name,
+                                            activeImage.mimeType,
+                                        )}
+                                    </span>
+                                </div>
+                            )}
 
                             {activeImage.requestedForRevision && (
-                                <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-4">
+                                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-4">
                                     <div className="flex items-center gap-2">
                                         <Badge
                                             variant="outline"
-                                            className="border-orange-500/20 bg-orange-500/10 text-orange-200"
+                                            className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
                                         >
                                             Клиент просит правку
                                         </Badge>
                                     </div>
-                                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-zinc-200">
-                                        {activeImageComment?.trim() || 'Клиент отметил эту работу для правки без отдельного комментария.'}
+                                    <p className="mt-3 text-sm leading-6 whitespace-pre-line text-zinc-200">
+                                        {activeImageComment?.trim() ||
+                                            'Клиент отметил эту работу для правки без отдельного комментария.'}
                                     </p>
 
-                                    {workflow.currentStageSlug === 'montage' && (
+                                    {workflow.currentStageSlug ===
+                                        'montage' && (
                                         <Button
                                             type="button"
                                             disabled={replaceForm.processing}
-                                            className="mt-4 bg-orange-500 text-white hover:bg-orange-600"
+                                            className="mt-4 bg-emerald-500 text-white hover:bg-emerald-600"
                                             onClick={openReplaceFilePicker}
                                         >
                                             <ImagePlus className="mr-2 h-4 w-4" />
-                                            {replaceForm.processing ? 'Замена...' : 'Заменить эту работу'}
+                                            {replaceForm.processing
+                                                ? 'Замена...'
+                                                : 'Заменить эту работу'}
                                         </Button>
                                     )}
                                 </div>
                             )}
+
+                            <div className="flex justify-end">
+                                <Button
+                                    asChild
+                                    type="button"
+                                    variant="outline"
+                                    className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                                >
+                                    <a
+                                        href={downloadMontageWork.url([
+                                            project.id,
+                                            activeImage.id,
+                                        ])}
+                                    >
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Скачать файл
+                                    </a>
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>
@@ -526,4 +711,57 @@ function formatBytes(sizeBytes: number): string {
     }
 
     return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`;
+}
+
+const BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/svg+xml',
+    'image/avif',
+]);
+
+const BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'bmp',
+    'svg',
+    'avif',
+]);
+
+function getFileExtension(name: string): string {
+    const lastDotIndex = name.lastIndexOf('.');
+
+    if (lastDotIndex === -1 || lastDotIndex === name.length - 1) {
+        return '';
+    }
+
+    return name.slice(lastDotIndex + 1).toLowerCase();
+}
+
+function canRenderImagePreview(name: string, mimeType: string | null): boolean {
+    if (mimeType && BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES.has(mimeType)) {
+        return true;
+    }
+
+    return BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS.has(getFileExtension(name));
+}
+
+function getFileTypeLabel(name: string, mimeType: string | null): string {
+    const extension = getFileExtension(name);
+
+    if (extension !== '') {
+        return extension;
+    }
+
+    if (mimeType) {
+        return mimeType.split('/')[1] ?? 'file';
+    }
+
+    return 'file';
 }

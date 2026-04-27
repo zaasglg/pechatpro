@@ -4,7 +4,7 @@ export default function AppLogo() {
     return (
         <>
             <div>
-                <img src="/assets/logo-white.svg" alt="Logo" className='h-5' />
+                <img src="/assets/logo.svg" alt="Logo" className="h-5" />
             </div>
         </>
     );

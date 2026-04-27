@@ -1,10 +1,23 @@
 import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { complete as completePrintProject, index as printProjectIndex, show as showPrintProject } from '@/actions/App/Http/Controllers/PrintProjectController';
+import {
+    complete as completePrintProject,
+    index as printProjectIndex,
+    show as showPrintProject,
+} from '@/actions/App/Http/Controllers/PrintProjectController';
+import {
+    printArchive as downloadPrintArchive,
+    printDownload as downloadPrintWork,
+} from '@/actions/App/Http/Controllers/ProjectMontageDownloadController';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 type ProjectSummary = {
     id: number;
@@ -21,6 +34,8 @@ type ReadyWork = {
     id: number;
     name: string;
     url: string;
+    previewUrl: string | null;
+    mimeType: string | null;
     sizeBytes: number;
 };
 
@@ -38,7 +53,11 @@ function formatFileSize(sizeBytes: number): string {
     return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`;
 }
 
-export default function PrintProjectShow({ project, readyWorks, status }: Props) {
+export default function PrintProjectShow({
+    project,
+    readyWorks,
+    status,
+}: Props) {
     setLayoutProps({
         breadcrumbs: [
             {
@@ -63,7 +82,7 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
         <>
             <Head title={`Печать | ${project.name}`} />
 
-            <div className="flex w-full flex-col gap-6 p-4 md:p-8">
+            <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <Link
                         href={printProjectIndex()}
@@ -74,19 +93,44 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
                         Назад
                     </Link>
 
-                    <Button
-                        type="button"
-                        disabled={completeForm.processing || readyWorks.length === 0 || project.printingReadyAt !== null}
-                        className="bg-orange-500 text-white hover:bg-orange-600"
-                        onClick={() => {
-                            completeForm.post(completePrintProject.url(project.id), {
-                                preserveScroll: true,
-                            });
-                        }}
-                    >
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        {project.printingReadyAt ? 'Печать уже завершена' : 'Печать готова'}
-                    </Button>
+                    <div className="flex flex-wrap gap-3">
+                        {readyWorks.length > 0 && (
+                            <Button
+                                asChild
+                                type="button"
+                                variant="outline"
+                                className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                            >
+                                <a href={downloadPrintArchive.url(project.id)}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Скачать архив
+                                </a>
+                            </Button>
+                        )}
+
+                        <Button
+                            type="button"
+                            disabled={
+                                completeForm.processing ||
+                                readyWorks.length === 0 ||
+                                project.printingReadyAt !== null
+                            }
+                            className="bg-emerald-500 text-white hover:bg-emerald-600"
+                            onClick={() => {
+                                completeForm.post(
+                                    completePrintProject.url(project.id),
+                                    {
+                                        preserveScroll: true,
+                                    },
+                                );
+                            }}
+                        >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            {project.printingReadyAt
+                                ? 'Печать уже завершена'
+                                : 'Печать готова'}
+                        </Button>
+                    </div>
                 </div>
 
                 <section>
@@ -94,7 +138,7 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
                         <div className="flex flex-wrap items-center gap-2">
                             <Badge
                                 variant="outline"
-                                className="border-orange-500/20 bg-orange-500/10 text-orange-200"
+                                className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
                             >
                                 {project.className}
                             </Badge>
@@ -114,18 +158,20 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
 
                         <div className="flex flex-wrap items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold tracking-tight text-white">
+                                <h1 className="text-3xl font-semibold text-white">
                                     {project.name}
                                 </h1>
                                 <p className="mt-2 text-sm text-zinc-500">
-                                    Фотограф: {project.photographerName ?? 'Не указан'}
+                                    Фотограф:{' '}
+                                    {project.photographerName ?? 'Не указан'}
                                 </p>
                                 <p className="mt-1 text-sm text-zinc-500">
-                                    Этап: {project.currentStageName ?? 'Неизвестно'}
+                                    Этап:{' '}
+                                    {project.currentStageName ?? 'Неизвестно'}
                                 </p>
                             </div>
 
-                            <div className="rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                            <div className="rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-3 text-sm text-zinc-300">
                                 {project.printingReadyAt
                                     ? 'Проект уже возвращен модератору как готовый к печати'
                                     : 'После завершения нажмите «Печать готова», чтобы вернуть проект модератору'}
@@ -145,26 +191,33 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
                         </div>
                     )}
 
-                    <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
                         {readyWorks.map((work) => (
                             <button
                                 key={work.id}
                                 type="button"
-                                className="overflow-hidden rounded-[1.5rem] border border-white/6 bg-white/[0.03] text-left transition hover:border-orange-500/40 hover:bg-white/[0.05]"
+                                className="group overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 text-left transition hover:border-emerald-500/40 hover:bg-slate-900/60"
                                 onClick={() => setActiveWorkId(work.id)}
                             >
-                                <div className="aspect-[4/3] overflow-hidden bg-black/40">
-                                    <img
-                                        src={work.url}
-                                        alt={work.name}
-                                        className="h-full w-full object-contain"
-                                    />
+                                <div className="aspect-square overflow-hidden bg-black/40">
+                                    {work.previewUrl ? (
+                                        <img
+                                            src={work.previewUrl}
+                                            alt={work.name}
+                                            loading="lazy"
+                                            className="h-full w-full object-cover transition group-hover:scale-105"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                                            {(work.name.split('.').pop() ?? '').toUpperCase() || 'FILE'}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="space-y-2 px-4 py-4">
-                                    <p className="line-clamp-2 text-lg text-white">
+                                <div className="px-2 py-1.5">
+                                    <p className="truncate text-[11px] text-zinc-300">
                                         {work.name}
                                     </p>
-                                    <p className="text-sm text-zinc-500">
+                                    <p className="text-[10px] text-zinc-600">
                                         {formatFileSize(work.sizeBytes)}
                                     </p>
                                 </div>
@@ -182,7 +235,7 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
                     }
                 }}
             >
-                <DialogContent className="max-w-5xl border-white/10 bg-zinc-950 text-white">
+                <DialogContent className="max-w-5xl border-white/10 bg-slate-950 text-white">
                     {activeWork && (
                         <>
                             <DialogTitle>{activeWork.name}</DialogTitle>
@@ -191,11 +244,36 @@ export default function PrintProjectShow({ project, readyWorks, status }: Props)
                             </DialogDescription>
 
                             <div className="mt-2 flex max-h-[78vh] items-center justify-center overflow-hidden rounded-2xl bg-black/40 p-4">
-                                <img
-                                    src={activeWork.url}
-                                    alt={activeWork.name}
-                                    className="h-auto max-h-[72vh] w-auto max-w-full rounded-xl object-contain"
-                                />
+                                {activeWork.previewUrl ? (
+                                    <img
+                                        src={activeWork.previewUrl}
+                                        alt={activeWork.name}
+                                        className="h-auto max-h-[72vh] w-auto max-w-full rounded-xl object-contain"
+                                    />
+                                ) : (
+                                    <div className="flex h-72 w-full items-center justify-center text-sm text-zinc-400">
+                                        Превью недоступно для этого формата.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end">
+                                <Button
+                                    asChild
+                                    type="button"
+                                    variant="outline"
+                                    className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                                >
+                                    <a
+                                        href={downloadPrintWork.url([
+                                            project.id,
+                                            activeWork.id,
+                                        ])}
+                                    >
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Скачать файл
+                                    </a>
+                                </Button>
                             </div>
                         </>
                     )}

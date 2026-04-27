@@ -28,6 +28,7 @@ class ProjectFactory extends Factory
             'album_size' => fake()->randomElement(Project::ALBUM_SIZES),
             'cover_type' => fake()->randomElement(Project::coverTypesForAlbumType($albumType)),
             'page_count' => fake()->randomElement(Project::pageCountOptionsForAlbumType($albumType)),
+            'portrait_count' => fake()->numberBetween(0, 7),
             'student_count' => fake()->numberBetween(10, 40),
             'print_quantity' => fake()->numberBetween(10, 100),
         ];

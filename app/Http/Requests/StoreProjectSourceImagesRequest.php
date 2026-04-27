@@ -27,9 +27,7 @@ class StoreProjectSourceImagesRequest extends FormRequest
             'images' => ['required', 'array', 'min:1', 'max:30'],
             'images.*' => [
                 'required',
-                File::image()
-                    ->types(['jpg', 'jpeg', 'png', 'webp'])
-                    ->max(10 * 1024),
+                File::default()->max('50mb'),
             ],
         ];
     }

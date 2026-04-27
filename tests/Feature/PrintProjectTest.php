@@ -3,6 +3,7 @@
 use App\Models\Project;
 use App\Models\ProjectStageDefinition;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -139,4 +140,81 @@ test('print users can mark printing as ready and return project to moderator', f
         ->assertSessionHas('status', 'Печать отмечена как готовая. Проект отправлен модератору.');
 
     expect($project->fresh()->printing_ready_at)->not()->toBeNull();
+});
+
+test('print users can download assigned ready work file', function () {
+    Storage::fake('public');
+
+    $printUser = User::factory()->create([
+        'approved_at' => now(),
+    ]);
+    $printUser->assignRole('Печать');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+    $project->advanceToStage(ProjectStageDefinition::SLUG_PRINTING);
+    $project->projectStages()
+        ->whereHas('stageDefinition', fn ($query) => $query->where('slug', ProjectStageDefinition::SLUG_PRINTING))
+        ->firstOrFail()
+        ->responsibleUsers()
+        ->sync([$printUser->id]);
+
+    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready.jpg", 'print-image');
+
+    $asset = $project->montageAssets()->create([
+        'path' => "project-montage-assets/{$project->id}/print-ready.jpg",
+        'original_name' => 'print-ready.jpg',
+        'size_bytes' => 150_000,
+        'mime_type' => 'image/jpeg',
+    ]);
+
+    $this->actingAs($printUser)
+        ->get(route('print.projects.works.download', [$project, $asset]))
+        ->assertOk()
+        ->assertDownload('print-ready.jpg');
+});
+
+test('print users can download assigned ready works as archive', function () {
+    Storage::fake('public');
+
+    $printUser = User::factory()->create([
+        'approved_at' => now(),
+    ]);
+    $printUser->assignRole('Печать');
+
+    $photographer = User::factory()->create();
+    $photographer->assignRole('Фотограф');
+
+    $project = Project::factory()->for($photographer, 'photographer')->create();
+    $project->advanceToStage(ProjectStageDefinition::SLUG_PRINTING);
+    $project->projectStages()
+        ->whereHas('stageDefinition', fn ($query) => $query->where('slug', ProjectStageDefinition::SLUG_PRINTING))
+        ->firstOrFail()
+        ->responsibleUsers()
+        ->sync([$printUser->id]);
+
+    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready-1.jpg", 'first-image');
+    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready-2.jpg", 'second-image');
+
+    $project->montageAssets()->createMany([
+        [
+            'path' => "project-montage-assets/{$project->id}/print-ready-1.jpg",
+            'original_name' => 'print-ready-1.jpg',
+            'size_bytes' => 150_000,
+            'mime_type' => 'image/jpeg',
+        ],
+        [
+            'path' => "project-montage-assets/{$project->id}/print-ready-2.jpg",
+            'original_name' => 'print-ready-2.jpg',
+            'size_bytes' => 151_000,
+            'mime_type' => 'image/jpeg',
+        ],
+    ]);
+
+    $this->actingAs($printUser)
+        ->get(route('print.projects.archive', $project))
+        ->assertOk()
+        ->assertDownload("project-{$project->id}-ready-works.zip");
 });
