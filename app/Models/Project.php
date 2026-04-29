@@ -38,6 +38,7 @@ use Illuminate\Support\Collection;
 class Project extends Model
 {
     public const CLASS_OPTIONS = [
+        'Садик',
         '1 класс',
         '4 класс',
         '9 класс',

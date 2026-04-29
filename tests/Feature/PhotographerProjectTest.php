@@ -79,7 +79,7 @@ test('photographers can open project creation page', function () {
             ->has('albumPricingRules', 16)
             ->has('portraitPricingRules', 6)
             ->where('albumPricingRules.0.coverPrice', 700)
-            ->where('albumPricingRules.0.pagePrice', 3500)
+            ->where('albumPricingRules.0.pagePrice', 500)
             ->where('portraitPricingRules.0.portraitCount', 2)
             ->where('portraitPricingRules.0.extraPrice', 500),
         );
@@ -194,7 +194,7 @@ test('photographers can create projects', function () {
     $this->actingAs($photographer)
         ->post(route('projects.store'), [
             'name' => 'Папка 11 класса',
-            'class_name' => '11 класс',
+            'class_name' => 'Садик',
             'album_type' => 'Кожаный',
             'album_size' => '30x30',
             'cover_type' => 'Кожаный',
@@ -212,6 +212,7 @@ test('photographers can create projects', function () {
 
     expect($project->photographer_id)->toBe($photographer->id);
     expect($project->name)->toBe('Папка 11 класса');
+    expect($project->class_name)->toBe('Садик');
     expect($project->portrait_count)->toBe(7);
     expect((float) $project->unit_price)->toBe(15000.0);
     expect((float) $project->total_price)->toBe(525000.0);
