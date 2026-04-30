@@ -18,6 +18,7 @@ use App\Http\Controllers\ProjectMontageDownloadController;
 use App\Http\Controllers\ProjectMontageReviewController;
 use App\Http\Controllers\ProjectSourceImageController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
 
 Route::inertia('/', 'welcome', [
@@ -25,6 +26,16 @@ Route::inertia('/', 'welcome', [
 ])->name('home');
 
 Route::post('locale', LocaleController::class)->name('locale.update');
+
+Route::get('/test-google', function () {
+    try {
+        Storage::disk('google')->put('test.txt', 'Hello Google Drive!');
+
+        return 'Файл успешно создан в папке!';
+    } catch (Exception $e) {
+        return 'Ошибка: '.$e->getMessage();
+    }
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');

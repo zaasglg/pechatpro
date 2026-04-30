@@ -38,6 +38,12 @@ return [
             'report' => false,
         ],
 
+        'google' => [
+            'driver' => 'google',
+            'serviceAccountJson' => storage_path('app/google-drive-key.json'), // Путь к файлу
+            'folderId' => env('GOOGLE_DRIVE_FOLDER_ID'),
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
