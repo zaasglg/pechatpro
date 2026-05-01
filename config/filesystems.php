@@ -38,12 +38,6 @@ return [
             'report' => false,
         ],
 
-        'google' => [
-            'driver' => 'google',
-            'serviceAccountJson' => storage_path('app/google-drive-key.json'), // Путь к файлу
-            'folderId' => env('GOOGLE_DRIVE_FOLDER_ID'),
-        ],
-
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
@@ -62,8 +56,7 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
-            'report' => false,
+            'throw' => true,
         ],
 
     ],

@@ -24,7 +24,9 @@ class ProjectMontageAssetController extends Controller
 {
     use ResolvesAssignedMontageProject;
 
-    public function __construct(private ProjectMontageAssetPreviewGenerator $previewGenerator) {}
+    public function __construct(
+        private ProjectMontageAssetPreviewGenerator $previewGenerator,
+    ) {}
 
     public function show(Request $request, Project $project): Response
     {
@@ -119,7 +121,7 @@ class ProjectMontageAssetController extends Controller
             $createdAssets = $project->montageAssets()->createMany(
                 collect($request->file('images'))
                     ->map(function (UploadedFile $image) use ($project, $request, $storedPaths): array {
-                        $path = $image->store("project-montage-assets/{$project->id}", 'public');
+                        $path = $image->store("project-montage-assets/{$project->id}", 's3');
                         $storedPaths->push($path);
 
                         return [
@@ -167,22 +169,28 @@ class ProjectMontageAssetController extends Controller
         abort_unless($asset->project_id === $project->id, 404);
 
         $image = $request->file('image');
-        $newPath = $image->store("project-montage-assets/{$project->id}", 'public');
+        $newPath = $image->store("project-montage-assets/{$project->id}", 's3');
         $oldPath = $asset->path;
         $oldPreviewPath = ProjectMontageAssetPreviewGenerator::previewPathForId($asset->id);
 
-        $asset->update([
-            'path' => $newPath,
-            'original_name' => $image->getClientOriginalName(),
-            'size_bytes' => (int) $image->getSize(),
-            'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
-        ]);
+        try {
+            $asset->update([
+                'path' => $newPath,
+                'original_name' => $image->getClientOriginalName(),
+                'size_bytes' => (int) $image->getSize(),
+                'mime_type' => $image->getClientMimeType() ?? 'application/octet-stream',
+            ]);
+        } catch (\Throwable $throwable) {
+            Storage::disk('s3')->delete($newPath);
 
-        Storage::disk('public')->delete($oldPreviewPath);
+            throw $throwable;
+        }
+
+        Storage::disk('s3')->delete($oldPreviewPath);
         $this->previewGenerator->ensureGeneratedPreviewPath($asset->refresh());
 
         if ($oldPath !== $newPath) {
-            Storage::disk('public')->delete($oldPath);
+            Storage::disk('s3')->delete($oldPath);
         }
 
         return to_route('montage.projects.works.show', $project)
@@ -250,7 +258,7 @@ class ProjectMontageAssetController extends Controller
     private function deleteStoredPaths(Collection $storedPaths): void
     {
         if ($storedPaths->isNotEmpty()) {
-            Storage::disk('public')->delete($storedPaths->all());
+            Storage::disk('s3')->delete($storedPaths->all());
         }
     }
 }

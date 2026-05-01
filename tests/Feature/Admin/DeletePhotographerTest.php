@@ -20,6 +20,7 @@ beforeEach(function () {
 
 test('admins can delete photographers with their related files and projects', function () {
     Storage::fake('public');
+    Storage::fake('s3');
 
     $admin = User::factory()->create();
     $admin->assignRole('Админ');
@@ -51,13 +52,13 @@ test('admins can delete photographers with their related files and projects', fu
     ]);
 
     Storage::disk('public')->put('avatars/deletable-photographer.jpg', 'avatar');
-    Storage::disk('public')->put("project-design-files/{$project->id}/design.psd", 'design');
-    Storage::disk('public')->put("project-source-images/{$project->id}/1.jpg", 'source');
-    Storage::disk('public')->put(
+    Storage::disk('s3')->put("project-design-files/{$project->id}/design.psd", 'design');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/1.jpg", 'source');
+    Storage::disk('s3')->put(
         ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id),
         'preview',
     );
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready.jpg", 'montage');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready.jpg", 'montage');
 
     $this->actingAs($admin)
         ->from(route('admin.photographer-approvals.index'))
@@ -68,12 +69,12 @@ test('admins can delete photographers with their related files and projects', fu
     $this->assertModelMissing($photographer);
     $this->assertModelMissing($project);
     Storage::disk('public')->assertMissing('avatars/deletable-photographer.jpg');
-    Storage::disk('public')->assertMissing("project-design-files/{$project->id}/design.psd");
-    Storage::disk('public')->assertMissing("project-source-images/{$project->id}/1.jpg");
-    Storage::disk('public')->assertMissing(
+    Storage::disk('s3')->assertMissing("project-design-files/{$project->id}/design.psd");
+    Storage::disk('s3')->assertMissing("project-source-images/{$project->id}/1.jpg");
+    Storage::disk('s3')->assertMissing(
         ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id),
     );
-    Storage::disk('public')->assertMissing("project-montage-assets/{$project->id}/ready.jpg");
+    Storage::disk('s3')->assertMissing("project-montage-assets/{$project->id}/ready.jpg");
 });
 
 test('moderators can delete photographers and return back to photographer list', function () {

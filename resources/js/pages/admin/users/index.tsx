@@ -1,7 +1,8 @@
 import { Head, useForm } from '@inertiajs/react';
-import { KeyRound, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { KeyRound, Phone, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { FormEventHandler, useMemo, useState } from 'react';
 import {
+    destroy as destroyUser,
     index as adminUsersIndex,
     resetPassword,
 } from '@/actions/App/Http/Controllers/Admin/UserController';
@@ -49,6 +50,7 @@ type ResetPasswordForm = {
 export default function AdminUsersIndex({ users, roles, status }: Props) {
     const [activeRole, setActiveRole] = useState<string>(roles[0] ?? 'Админ');
     const [targetUser, setTargetUser] = useState<AdminUser | null>(null);
+    const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
 
     const usersByRole = useMemo(() => {
         const map = new Map<string, AdminUser[]>();
@@ -73,6 +75,16 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
         password: '',
         password_confirmation: '',
     });
+
+    const deleteForm = useForm({});
+
+    const handleConfirmDelete = () => {
+        if (userToDelete === null) return;
+        deleteForm.delete(destroyUser.url(userToDelete.id), {
+            preserveScroll: true,
+            onSuccess: () => setUserToDelete(null),
+        });
+    };
 
     const closeDialog = () => {
         setTargetUser(null);
@@ -243,14 +255,18 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
                                                             type="button"
                                                             variant="outline"
                                                             className="border-white/10 bg-white/5 text-white hover:bg-white/10"
-                                                            onClick={() =>
-                                                                setTargetUser(
-                                                                    user,
-                                                                )
-                                                            }
+                                                            onClick={() => setTargetUser(user)}
                                                         >
                                                             <KeyRound className="mr-2 h-4 w-4" />
                                                             Сбросить пароль
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            className="border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                                                            onClick={() => setUserToDelete(user)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -263,6 +279,37 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
                     })}
                 </Tabs>
             </div>
+
+            <Dialog
+                open={userToDelete !== null}
+                onOpenChange={(open) => { if (!open) setUserToDelete(null); }}
+            >
+                <DialogContent className="max-w-md bg-slate-950 text-white">
+                    <DialogTitle>Удалить пользователя?</DialogTitle>
+                    <DialogDescription className="text-zinc-400">
+                        Аккаунт <span className="font-medium text-white">{userToDelete?.name}</span> будет удалён без возможности восстановления.
+                    </DialogDescription>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="border-white/10 bg-transparent text-white hover:bg-white/5"
+                            onClick={() => setUserToDelete(null)}
+                            disabled={deleteForm.processing}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            type="button"
+                            className="bg-rose-600 text-white hover:bg-rose-500"
+                            onClick={handleConfirmDelete}
+                            disabled={deleteForm.processing}
+                        >
+                            {deleteForm.processing ? 'Удаление...' : 'Удалить'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={targetUser !== null}

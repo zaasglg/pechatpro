@@ -143,7 +143,7 @@ test('print users can mark printing as ready and return project to moderator', f
 });
 
 test('print users can download assigned ready work file', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $printUser = User::factory()->create([
         'approved_at' => now(),
@@ -161,7 +161,7 @@ test('print users can download assigned ready work file', function () {
         ->responsibleUsers()
         ->sync([$printUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready.jpg", 'print-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/print-ready.jpg", 'print-image');
 
     $asset = $project->montageAssets()->create([
         'path' => "project-montage-assets/{$project->id}/print-ready.jpg",
@@ -177,7 +177,7 @@ test('print users can download assigned ready work file', function () {
 });
 
 test('print users can download assigned ready works as archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $printUser = User::factory()->create([
         'approved_at' => now(),
@@ -195,8 +195,8 @@ test('print users can download assigned ready works as archive', function () {
         ->responsibleUsers()
         ->sync([$printUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready-1.jpg", 'first-image');
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/print-ready-2.jpg", 'second-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/print-ready-1.jpg", 'first-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/print-ready-2.jpg", 'second-image');
 
     $project->montageAssets()->createMany([
         [

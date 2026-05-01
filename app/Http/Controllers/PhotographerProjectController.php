@@ -15,7 +15,6 @@ use App\Support\ProjectSourceImagePreviewGenerator;
 use App\Support\PublicStorageUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -220,27 +219,26 @@ class PhotographerProjectController extends Controller
         ProjectPricingCalculator $pricingCalculator,
     ): RedirectResponse {
         $validated = $request->validated();
-        $storedDesignPath = null;
+        $storedDesignPaths = [];
         $unitPrice = $pricingCalculator->calculateUnitPrice($validated);
         $totalPrice = $pricingCalculator->calculateTotalPrice($validated);
 
         abort_if($unitPrice === null || $totalPrice === null, 422, 'Для этой конфигурации альбома цена не настроена.');
 
         try {
-            $project = DB::transaction(function () use ($request, $unitPrice, $totalPrice, &$storedDesignPath): Project {
+            $project = DB::transaction(function () use ($request, $unitPrice, $totalPrice, &$storedDesignPaths): Project {
                 $project = $request->user()->projects()->create([
-                    ...$request->safe()->except('design_file'),
+                    ...$request->safe()->except('design_files'),
                     'unit_price' => $unitPrice,
                     'total_price' => $totalPrice,
                 ]);
 
-                $designFile = $request->file('design_file');
-
-                if ($designFile instanceof UploadedFile) {
-                    $storedDesignPath = $designFile->store("project-design-files/{$project->id}", 'public');
+                foreach ($request->file('design_files', []) as $designFile) {
+                    $path = $designFile->store("project-design-files/{$project->id}", 's3');
+                    $storedDesignPaths[] = $path;
 
                     $project->designFiles()->create([
-                        'path' => $storedDesignPath,
+                        'path' => $path,
                         'original_name' => $designFile->getClientOriginalName(),
                         'size_bytes' => (int) $designFile->getSize(),
                         'mime_type' => $designFile->getClientMimeType() ?? 'application/octet-stream',
@@ -250,8 +248,8 @@ class PhotographerProjectController extends Controller
                 return $project;
             });
         } catch (\Throwable $throwable) {
-            if ($storedDesignPath !== null) {
-                Storage::disk('public')->delete($storedDesignPath);
+            if ($storedDesignPaths !== []) {
+                Storage::disk('s3')->delete($storedDesignPaths);
             }
 
             throw $throwable;
@@ -300,7 +298,7 @@ class PhotographerProjectController extends Controller
         ]));
 
         if ($pathsToDelete !== []) {
-            Storage::disk('public')->delete($pathsToDelete);
+            Storage::disk('s3')->delete($pathsToDelete);
         }
 
         return to_route('projects.index')

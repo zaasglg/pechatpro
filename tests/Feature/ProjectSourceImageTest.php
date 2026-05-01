@@ -19,7 +19,7 @@ beforeEach(function () {
 });
 
 test('legacy source images url opens the project page on the source images tab', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -62,7 +62,7 @@ test('legacy source images url opens the project page on the source images tab',
 });
 
 test('project page exposes generated preview url for imagick-rasterized source images', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -78,7 +78,7 @@ test('project page exposes generated preview url for imagick-rasterized source i
     $imagick->clear();
     $imagick->destroy();
 
-    Storage::disk('public')->put($rasterizedPath, file_get_contents($temporaryTiffPath));
+    Storage::disk('s3')->put($rasterizedPath, file_get_contents($temporaryTiffPath));
     @unlink($temporaryTiffPath);
 
     $sourceImage = ProjectSourceImage::factory()->for($project)->create([
@@ -99,16 +99,16 @@ test('project page exposes generated preview url for imagick-rasterized source i
             ->where('sourceImages.0.previewUrl', PublicStorageUrl::make($previewPath))
         );
 
-    Storage::disk('public')->assertExists($previewPath);
+    Storage::disk('s3')->assertExists($previewPath);
 });
 
 test('generator falls back to macos quick look when imagick can not rasterize a raw file', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $project = Project::factory()->create();
     $rawPath = "project-source-images/{$project->id}/preview-source.cr2";
 
-    Storage::disk('public')->put($rawPath, 'raw-binary');
+    Storage::disk('s3')->put($rawPath, 'raw-binary');
 
     $sourceImage = ProjectSourceImage::factory()->for($project)->create([
         'path' => $rawPath,
@@ -132,12 +132,12 @@ test('generator falls back to macos quick look when imagick can not rasterize a 
     $previewPath = $generator->ensureGeneratedPreviewPath($sourceImage);
 
     expect($previewPath)->toBe(ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id));
-    Storage::disk('public')->assertExists($previewPath);
-    expect(Storage::disk('public')->get($previewPath))->toBe('generated-preview');
+    Storage::disk('s3')->assertExists($previewPath);
+    expect(Storage::disk('s3')->get($previewPath))->toBe('generated-preview');
 });
 
 test('photographers can upload multiple source images to their project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -167,12 +167,12 @@ test('photographers can upload multiple source images to their project', functio
     expect($sourceImages)->toHaveCount(2);
 
     foreach ($sourceImages as $sourceImage) {
-        Storage::disk('public')->assertExists($sourceImage->path);
+        Storage::disk('s3')->assertExists($sourceImage->path);
     }
 });
 
 test('photographers can upload non image source files to their project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -202,11 +202,11 @@ test('photographers can upload non image source files to their project', functio
     expect($sourceFile)->not->toBeNull();
     expect($sourceFile?->original_name)->toBe('source-layout.psd');
     expect($sourceFile?->mime_type)->toStartWith('application/');
-    Storage::disk('public')->assertExists($sourceFile->path);
+    Storage::disk('s3')->assertExists($sourceFile->path);
 });
 
 test('photographers can upload source files larger than the old ten megabyte limit', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -236,11 +236,11 @@ test('photographers can upload source files larger than the old ten megabyte lim
     expect($sourceFile)->not->toBeNull();
     expect($sourceFile?->original_name)->toBe('source-archive.zip');
     expect($sourceFile?->mime_type)->toBe('application/zip');
-    Storage::disk('public')->assertExists($sourceFile->path);
+    Storage::disk('s3')->assertExists($sourceFile->path);
 });
 
 test('photographers can delete their own source images', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -253,8 +253,8 @@ test('photographers can delete their own source images', function () {
     ]);
     $previewPath = ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id);
 
-    Storage::disk('public')->put($sourceImage->path, 'source-binary');
-    Storage::disk('public')->put($previewPath, 'preview-binary');
+    Storage::disk('s3')->put($sourceImage->path, 'source-binary');
+    Storage::disk('s3')->put($previewPath, 'preview-binary');
 
     $this->actingAs($photographer)
         ->delete(route('projects.source-images.destroy', [
@@ -268,12 +268,12 @@ test('photographers can delete their own source images', function () {
         ->assertSessionHas('status', 'Исходник source-1.CR2 удален.');
 
     expect($project->sourceImages()->whereKey($sourceImage->id)->exists())->toBeFalse();
-    Storage::disk('public')->assertMissing($sourceImage->path);
-    Storage::disk('public')->assertMissing($previewPath);
+    Storage::disk('s3')->assertMissing($sourceImage->path);
+    Storage::disk('s3')->assertMissing($previewPath);
 });
 
 test('photographers can not delete source images from another photographers project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -286,7 +286,7 @@ test('photographers can not delete source images from another photographers proj
         'path' => "project-source-images/{$project->id}/source-1.jpg",
     ]);
 
-    Storage::disk('public')->put($sourceImage->path, 'source-binary');
+    Storage::disk('s3')->put($sourceImage->path, 'source-binary');
 
     $this->actingAs($photographer)
         ->delete(route('projects.source-images.destroy', [
@@ -296,11 +296,11 @@ test('photographers can not delete source images from another photographers proj
         ->assertNotFound();
 
     expect($project->sourceImages()->whereKey($sourceImage->id)->exists())->toBeTrue();
-    Storage::disk('public')->assertExists($sourceImage->path);
+    Storage::disk('s3')->assertExists($sourceImage->path);
 });
 
 test('photographers can move project to photographer shot stage after confirming source images', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -333,7 +333,7 @@ test('photographers can move project to photographer shot stage after confirming
 });
 
 test('legacy projects still allow confirming source images when the old active stage is photographer shot', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -423,7 +423,7 @@ test('photographers can not open another photographers source images page', func
 });
 
 test('photographers can not upload images into another photographers project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');

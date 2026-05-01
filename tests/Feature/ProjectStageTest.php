@@ -83,7 +83,7 @@ test('project stages can have responsible users assigned to them', function () {
 });
 
 test('project moves through the full realization workflow from creation to printing', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');

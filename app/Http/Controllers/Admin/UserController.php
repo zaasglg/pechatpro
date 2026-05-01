@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -50,6 +51,22 @@ class UserController extends Controller
             'roles' => self::MANAGED_ROLES,
             'status' => $request->session()->get('status'),
         ]);
+    }
+
+    public function destroy(User $user): RedirectResponse
+    {
+        abort_if($user->id === auth()->id(), 403, 'Нельзя удалить собственный аккаунт.');
+
+        $userName = $user->name;
+        $avatarPath = $user->avatar_path;
+
+        $user->delete();
+
+        if (filled($avatarPath)) {
+            Storage::disk('public')->delete($avatarPath);
+        }
+
+        return back()->with('status', "Пользователь {$userName} удалён.");
     }
 
     public function resetPassword(ResetUserPasswordRequest $request, User $user): RedirectResponse

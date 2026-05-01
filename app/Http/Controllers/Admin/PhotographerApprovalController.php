@@ -107,8 +107,7 @@ class PhotographerApprovalController extends Controller
         }
 
         $photographerName = $user->name;
-        $pathsToDelete = array_values(array_unique(array_filter([
-            $user->avatar_path,
+        $s3PathsToDelete = array_values(array_unique(array_filter([
             ...$designFilePaths,
             ...$sourceImagePaths,
             ...$sourceImagePreviewPaths,
@@ -119,8 +118,12 @@ class PhotographerApprovalController extends Controller
             $user->delete();
         });
 
-        if ($pathsToDelete !== []) {
-            Storage::disk('public')->delete($pathsToDelete);
+        if (filled($user->avatar_path)) {
+            Storage::disk('public')->delete($user->avatar_path);
+        }
+
+        if ($s3PathsToDelete !== []) {
+            Storage::disk('s3')->delete($s3PathsToDelete);
         }
 
         return back()->with('status', "Фотограф {$photographerName} удален.");

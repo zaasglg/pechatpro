@@ -181,7 +181,7 @@ test('photographers can not open another photographers project detail page', fun
 });
 
 test('photographers can create projects', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -202,7 +202,7 @@ test('photographers can create projects', function () {
             'portrait_count' => 7,
             'student_count' => 31,
             'print_quantity' => 35,
-            'design_file' => $designFile,
+            'design_files' => [$designFile],
         ])
         ->assertRedirect(route('projects.index'))
         ->assertSessionHas('status', 'Проект Папка 11 класса создан.');
@@ -219,11 +219,11 @@ test('photographers can create projects', function () {
     expect($storedDesignFile)->not->toBeNull();
     expect($storedDesignFile?->original_name)->toBe('album-layout.indd');
     expect($storedDesignFile?->mime_type)->toBe('application/octet-stream');
-    Storage::disk('public')->assertExists($storedDesignFile->path);
+    Storage::disk('s3')->assertExists($storedDesignFile->path);
 });
 
 test('photographers can create projects without price records in database', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -245,7 +245,7 @@ test('photographers can create projects without price records in database', func
             'portrait_count' => 3,
             'student_count' => 31,
             'print_quantity' => 35,
-            'design_file' => $designFile,
+            'design_files' => [$designFile],
         ])
         ->assertRedirect(route('projects.index'))
         ->assertSessionHas('status', 'Проект Проект без базы цен создан.');
@@ -320,7 +320,7 @@ test('photographers can not specify more than seven portraits', function () {
 });
 
 test('photographers can delete their own projects', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $photographer = User::factory()->create();
     $photographer->assignRole('Фотограф');
@@ -346,13 +346,13 @@ test('photographers can delete their own projects', function () {
         'size_bytes' => 23456,
         'mime_type' => 'image/jpeg',
     ]);
-    Storage::disk('public')->put("project-design-files/{$project->id}/layout.ai", 'design');
-    Storage::disk('public')->put("project-source-images/{$project->id}/source-1.jpg", 'source');
-    Storage::disk('public')->put(
+    Storage::disk('s3')->put("project-design-files/{$project->id}/layout.ai", 'design');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/source-1.jpg", 'source');
+    Storage::disk('s3')->put(
         ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id),
         'preview',
     );
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'montage');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'montage');
 
     $this->actingAs($photographer)
         ->delete(route('projects.destroy', $project))
@@ -360,12 +360,12 @@ test('photographers can delete their own projects', function () {
         ->assertSessionHas('status', 'Проект Удаляемый проект удален.');
 
     expect(Project::query()->whereKey($project->id)->exists())->toBeFalse();
-    Storage::disk('public')->assertMissing("project-design-files/{$project->id}/layout.ai");
-    Storage::disk('public')->assertMissing("project-source-images/{$project->id}/source-1.jpg");
-    Storage::disk('public')->assertMissing(
+    Storage::disk('s3')->assertMissing("project-design-files/{$project->id}/layout.ai");
+    Storage::disk('s3')->assertMissing("project-source-images/{$project->id}/source-1.jpg");
+    Storage::disk('s3')->assertMissing(
         ProjectSourceImagePreviewGenerator::previewPathForId($sourceImage->id),
     );
-    Storage::disk('public')->assertMissing("project-montage-assets/{$project->id}/ready-1.jpg");
+    Storage::disk('s3')->assertMissing("project-montage-assets/{$project->id}/ready-1.jpg");
 });
 
 test('photographers can not delete another photographers project', function () {

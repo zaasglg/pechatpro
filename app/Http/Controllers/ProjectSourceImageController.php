@@ -46,7 +46,7 @@ class ProjectSourceImageController extends Controller
         try {
             collect($request->file('images'))
                 ->each(function (UploadedFile $image) use ($project, $previewGenerator, $storedPaths): void {
-                    $path = $image->store("project-source-images/{$project->id}", 'public');
+                    $path = $image->store("project-source-images/{$project->id}", 's3');
                     $storedPaths->push($path);
 
                     $sourceImage = $project->sourceImages()->create([
@@ -135,7 +135,7 @@ class ProjectSourceImageController extends Controller
         $sourceImage->delete();
 
         if ($pathsToDelete !== []) {
-            Storage::disk('public')->delete($pathsToDelete);
+            Storage::disk('s3')->delete($pathsToDelete);
         }
 
         return to_route('projects.show', [
@@ -161,7 +161,7 @@ class ProjectSourceImageController extends Controller
     private function deleteStoredPaths(Collection $storedPaths): void
     {
         if ($storedPaths->isNotEmpty()) {
-            Storage::disk('public')->delete($storedPaths->all());
+            Storage::disk('s3')->delete($storedPaths->all());
         }
     }
 }

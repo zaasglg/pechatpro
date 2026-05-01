@@ -42,7 +42,8 @@ class StoreProjectRequest extends FormRequest
             'portrait_count' => ['required', 'integer', 'min:0', 'max:7'],
             'student_count' => ['required', 'integer', 'min:1', 'max:500'],
             'print_quantity' => ['required', 'integer', 'min:1', 'max:5000'],
-            'design_file' => ['nullable', 'file'],
+            'design_files' => ['nullable', 'array', 'max:5'],
+            'design_files.*' => ['file'],
         ];
     }
 

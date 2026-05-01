@@ -27,14 +27,28 @@ Route::inertia('/', 'welcome', [
 
 Route::post('locale', LocaleController::class)->name('locale.update');
 
-Route::get('/test-google', function () {
+Route::get('/test-s3', function () {
     try {
-        Storage::disk('google')->put('test.txt', 'Hello Google Drive!');
+        // 1. Создаем тестовый файл
+        Storage::disk('s3')->put('test.txt', 'Привет, IDrive e2! Файл успешно записан.');
 
-        return 'Файл успешно создан в папке!';
+        // 2. Проверяем, существует ли он
+        if (Storage::disk('s3')->exists('test.txt')) {
+            // 3. Удаляем файл (вы же хотели часто удалять)
+            Storage::disk('s3')->delete('test.txt');
+
+            return 'Успех! Laravel подключился к IDrive e2, создал и удалил файл.';
+        }
     } catch (Exception $e) {
         return 'Ошибка: '.$e->getMessage();
     }
+});
+
+Route::get('/test-s3-permanent', function () {
+    // Загружаем файл, но НЕ удаляем его
+    Storage::disk('s3')->put('hello_world.txt', 'Этот файл останется в бакете!');
+
+    return 'Файл загружен. Проверьте панель IDrive e2!';
 });
 
 Route::middleware('auth')->group(function () {
@@ -75,6 +89,8 @@ Route::middleware(['auth', 'role:Админ'])
         Route::get('/', [AdminUserController::class, 'index'])->name('index');
         Route::post('/{user}/reset-password', [AdminUserController::class, 'resetPassword'])
             ->name('reset-password');
+        Route::delete('/{user}', [AdminUserController::class, 'destroy'])
+            ->name('destroy');
     });
 
 Route::middleware(['auth', 'role:Модератор'])

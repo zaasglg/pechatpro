@@ -12,13 +12,14 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use ZipArchive;
 
 class ProjectMontageDownloadController extends Controller
 {
     use ResolvesAssignedMontageProject;
 
-    public function moderatorDownload(Project $project, ProjectMontageAsset $asset): BinaryFileResponse
+    public function moderatorDownload(Project $project, ProjectMontageAsset $asset): StreamedResponse
     {
         $project->ensureWorkflowState();
 
@@ -32,7 +33,7 @@ class ProjectMontageDownloadController extends Controller
         return $this->downloadArchive($project);
     }
 
-    public function moderatorSourceImageDownload(Project $project, ProjectSourceImage $sourceImage): BinaryFileResponse
+    public function moderatorSourceImageDownload(Project $project, ProjectSourceImage $sourceImage): StreamedResponse
     {
         $project->ensureWorkflowState();
 
@@ -53,7 +54,7 @@ class ProjectMontageDownloadController extends Controller
         return $this->downloadProjectArchive($project);
     }
 
-    public function montageDownload(Request $request, Project $project, ProjectMontageAsset $asset): BinaryFileResponse
+    public function montageDownload(Request $request, Project $project, ProjectMontageAsset $asset): StreamedResponse
     {
         $project = $this->resolveAssignedMontageProject($request->user(), $project);
         $project->ensureWorkflowState();
@@ -84,7 +85,7 @@ class ProjectMontageDownloadController extends Controller
         return $this->downloadClientSelectionArchive($project);
     }
 
-    public function printDownload(Request $request, Project $project, ProjectMontageAsset $asset): BinaryFileResponse
+    public function printDownload(Request $request, Project $project, ProjectMontageAsset $asset): StreamedResponse
     {
         $project = $this->resolveAssignedPrintProject($request->user(), $project);
         $project->ensureWorkflowState();
@@ -100,15 +101,15 @@ class ProjectMontageDownloadController extends Controller
         return $this->downloadArchive($project, onlyUploaderUserId: $project->designer_user_id);
     }
 
-    private function downloadAsset(Project $project, ProjectMontageAsset $asset): BinaryFileResponse
+    private function downloadAsset(Project $project, ProjectMontageAsset $asset): StreamedResponse
     {
         abort_unless($asset->project_id === $project->id, 404);
-        abort_unless(Storage::disk('public')->exists($asset->path), 404);
+        abort_unless(Storage::disk('s3')->exists($asset->path), 404);
 
-        return response()->download(
-            Storage::disk('public')->path($asset->path),
+        return response()->streamDownload(
+            fn () => fpassthru(Storage::disk('s3')->readStream($asset->path)),
             $asset->original_name,
-            ['Content-Type' => $asset->mime_type],
+            ['Content-Type' => $asset->mime_type ?? 'application/octet-stream'],
         );
     }
 
@@ -139,26 +140,26 @@ class ProjectMontageDownloadController extends Controller
         $usedNames = [];
 
         foreach ($assets as $asset) {
-            if (! Storage::disk('public')->exists($asset->path)) {
+            if (! Storage::disk('s3')->exists($asset->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($asset->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName($asset->original_name, $usedNames),
+                Storage::disk('s3')->get($asset->path),
             );
         }
 
         $designFiles = $project->designFiles()->get();
 
         foreach ($designFiles as $designFile) {
-            if (! Storage::disk('public')->exists($designFile->path)) {
+            if (! Storage::disk('s3')->exists($designFile->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($designFile->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName("дизайн-проекта/{$designFile->original_name}", $usedNames),
+                Storage::disk('s3')->get($designFile->path),
             );
         }
 
@@ -169,13 +170,13 @@ class ProjectMontageDownloadController extends Controller
             ->deleteFileAfterSend(true);
     }
 
-    private function downloadSourceImage(Project $project, ProjectSourceImage $sourceImage): BinaryFileResponse
+    private function downloadSourceImage(Project $project, ProjectSourceImage $sourceImage): StreamedResponse
     {
         abort_unless($sourceImage->project_id === $project->id, 404);
-        abort_unless(Storage::disk('public')->exists($sourceImage->path), 404);
+        abort_unless(Storage::disk('s3')->exists($sourceImage->path), 404);
 
-        return response()->download(
-            Storage::disk('public')->path($sourceImage->path),
+        return response()->streamDownload(
+            fn () => fpassthru(Storage::disk('s3')->readStream($sourceImage->path)),
             $sourceImage->original_name,
             ['Content-Type' => $sourceImage->mime_type ?? 'application/octet-stream'],
         );
@@ -197,13 +198,13 @@ class ProjectMontageDownloadController extends Controller
         $addedFilesCount = 0;
 
         foreach ($sourceImages as $sourceImage) {
-            if (! Storage::disk('public')->exists($sourceImage->path)) {
+            if (! Storage::disk('s3')->exists($sourceImage->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($sourceImage->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName($sourceImage->original_name, $usedNames),
+                Storage::disk('s3')->get($sourceImage->path),
             );
             $addedFilesCount++;
         }
@@ -236,37 +237,37 @@ class ProjectMontageDownloadController extends Controller
         $addedFilesCount = 0;
 
         foreach ($sourceImages as $sourceImage) {
-            if (! Storage::disk('public')->exists($sourceImage->path)) {
+            if (! Storage::disk('s3')->exists($sourceImage->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($sourceImage->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName("source-images/{$sourceImage->original_name}", $usedNames),
+                Storage::disk('s3')->get($sourceImage->path),
             );
             $addedFilesCount++;
         }
 
         foreach ($readyWorks as $readyWork) {
-            if (! Storage::disk('public')->exists($readyWork->path)) {
+            if (! Storage::disk('s3')->exists($readyWork->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($readyWork->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName("ready-works/{$readyWork->original_name}", $usedNames),
+                Storage::disk('s3')->get($readyWork->path),
             );
             $addedFilesCount++;
         }
 
         foreach ($designFiles as $designFile) {
-            if (! Storage::disk('public')->exists($designFile->path)) {
+            if (! Storage::disk('s3')->exists($designFile->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($designFile->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName("design-files/{$designFile->original_name}", $usedNames),
+                Storage::disk('s3')->get($designFile->path),
             );
             $addedFilesCount++;
         }
@@ -298,13 +299,13 @@ class ProjectMontageDownloadController extends Controller
         $usedNames = [];
 
         foreach ($selectedSourceImages as $sourceImage) {
-            if (! Storage::disk('public')->exists($sourceImage->path)) {
+            if (! Storage::disk('s3')->exists($sourceImage->path)) {
                 continue;
             }
 
-            $zip->addFile(
-                Storage::disk('public')->path($sourceImage->path),
+            $zip->addFromString(
                 $this->uniqueArchiveFileName($sourceImage->original_name, $usedNames),
+                Storage::disk('s3')->get($sourceImage->path),
             );
         }
 

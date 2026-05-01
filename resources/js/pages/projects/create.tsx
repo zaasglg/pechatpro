@@ -44,10 +44,10 @@ type ProjectFormData = {
     portrait_count: string;
     student_count: string;
     print_quantity: string;
-    design_file: File | null;
+    design_files: File[];
 };
 
-type ProjectFormField = Exclude<keyof ProjectFormData, 'design_file'>;
+type ProjectFormField = Exclude<keyof ProjectFormData, 'design_files'>;
 
 export default function ProjectCreate({
     classOptions,
@@ -71,7 +71,7 @@ export default function ProjectCreate({
         portrait_count: '',
         student_count: '',
         print_quantity: '',
-        design_file: null,
+        design_files: [],
     });
 
     const availableCoverTypes = form.data.album_type
@@ -135,24 +135,30 @@ export default function ProjectCreate({
     };
 
     const handleDesignFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0] ?? null;
-        form.setData('design_file', file);
-        form.clearErrors('design_file');
-    };
-
-    const clearDesignFile = () => {
-        form.setData('design_file', null);
-        form.clearErrors('design_file');
+        const selected = Array.from(event.target.files ?? []);
+        if (selected.length === 0) return;
+        form.setData('design_files', [
+            ...form.data.design_files,
+            ...selected,
+        ].slice(0, 5));
+        form.clearErrors('design_files');
         if (designFileInputRef.current) {
             designFileInputRef.current.value = '';
         }
     };
 
+    const removeDesignFile = (index: number) => {
+        form.setData(
+            'design_files',
+            form.data.design_files.filter((_, i) => i !== index),
+        );
+    };
+
     const submit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!form.data.design_file) {
-            form.setError('design_file', 'Загрузите файл дизайна');
+        if (form.data.design_files.length === 0) {
+            form.setError('design_files', 'Загрузите файл дизайна');
             return;
         }
 
@@ -186,7 +192,7 @@ export default function ProjectCreate({
         form.data.print_quantity,
     ].filter((v) => v.toString().trim() !== '').length;
     const totalSteps = 10;
-    const filledSteps = stepsFilled + (form.data.design_file ? 1 : 0);
+    const filledSteps = stepsFilled + (form.data.design_files.length > 0 ? 1 : 0);
     const progressPercent = Math.round((filledSteps / totalSteps) * 100);
 
     const [isDragging, setIsDragging] = useState(false);
@@ -194,12 +200,13 @@ export default function ProjectCreate({
     const handleDrop = (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         setIsDragging(false);
-        const file = event.dataTransfer.files?.[0];
-        if (!file) {
-            return;
-        }
-        form.setData('design_file', file);
-        form.clearErrors('design_file');
+        const dropped = Array.from(event.dataTransfer.files);
+        if (dropped.length === 0) return;
+        form.setData('design_files', [
+            ...form.data.design_files,
+            ...dropped,
+        ].slice(0, 5));
+        form.clearErrors('design_files');
     };
 
     return (
@@ -209,6 +216,7 @@ export default function ProjectCreate({
             <input
                 ref={designFileInputRef}
                 type="file"
+                multiple
                 className="hidden"
                 onChange={handleDesignFileChange}
             />
@@ -256,59 +264,66 @@ export default function ProjectCreate({
                     </Field>
 
                     {showDesignFile && (
-                        <Field label="Файл дизайна" error={form.errors.design_file}>
-                            {form.data.design_file ? (
-                                <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300">
-                                            <Check className="h-5 w-5" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="truncate text-sm text-white">
-                                                {form.data.design_file.name}
-                                            </p>
-                                            <p className="mt-0.5 text-xs text-zinc-500">
-                                                {formatFileSize(form.data.design_file.size)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={clearDesignFile}
-                                        className="shrink-0 rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
-                                        aria-label="Удалить файл"
+                        <Field label="Файл дизайна" error={form.errors.design_files}>
+                            <div className="flex flex-col gap-2">
+                                {form.data.design_files.map((file, index) => (
+                                    <div
+                                        key={index}
+                                        className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3"
                                     >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div
-                                    onDragOver={(e) => {
-                                        e.preventDefault();
-                                        setIsDragging(true);
-                                    }}
-                                    onDragLeave={() => setIsDragging(false)}
-                                    onDrop={handleDrop}
-                                    onClick={() => designFileInputRef.current?.click()}
-                                    className={cn(
-                                        'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition',
-                                        isDragging
-                                            ? 'border-emerald-400/60 bg-emerald-500/10'
-                                            : 'border-white/15 bg-slate-950/40 hover:border-emerald-400/40 hover:bg-slate-900/50',
-                                        form.errors.design_file && 'border-rose-500/60',
-                                    )}
-                                >
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5">
-                                        <Upload className="h-5 w-5 text-emerald-300" />
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300">
+                                                <Check className="h-5 w-5" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm text-white">
+                                                    {file.name}
+                                                </p>
+                                                <p className="mt-0.5 text-xs text-zinc-500">
+                                                    {formatFileSize(file.size)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeDesignFile(index)}
+                                            className="shrink-0 rounded-full p-1.5 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+                                            aria-label="Удалить файл"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
                                     </div>
-                                    <p className="text-sm font-medium text-white">
-                                        Перетащите файл или нажмите
-                                    </p>
-                                    <p className="text-xs text-zinc-500">
-                                        PSD, AI, PDF, ZIP
-                                    </p>
-                                </div>
-                            )}
+                                ))}
+
+                                {form.data.design_files.length < 5 && (
+                                    <div
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            setIsDragging(true);
+                                        }}
+                                        onDragLeave={() => setIsDragging(false)}
+                                        onDrop={handleDrop}
+                                        onClick={() => designFileInputRef.current?.click()}
+                                        className={cn(
+                                            'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center transition',
+                                            isDragging
+                                                ? 'border-emerald-400/60 bg-emerald-500/10'
+                                                : 'border-white/15 bg-slate-950/40 hover:border-emerald-400/40 hover:bg-slate-900/50',
+                                            form.errors.design_files && 'border-rose-500/60',
+                                        )}
+                                    >
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5">
+                                            <Upload className="h-5 w-5 text-emerald-300" />
+                                        </div>
+                                        <p className="text-sm font-medium text-white">
+                                            Перетащите файл или нажмите
+                                        </p>
+                                        <p className="text-xs text-zinc-500">
+                                            PSD, AI, PDF, ZIP · до {5 - form.data.design_files.length} файл{5 - form.data.design_files.length === 1 ? '' : 'а'}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
 
                             {form.progress && (
                                 <div className="mt-2 overflow-hidden rounded-full bg-white/8">
@@ -525,7 +540,7 @@ export default function ProjectCreate({
                                 disabled={
                                     form.processing ||
                                     unitPrice === null ||
-                                    !form.data.design_file
+                                    form.data.design_files.length === 0
                                 }
                                 className="bg-emerald-500 text-white hover:bg-emerald-600 disabled:bg-white/10 disabled:text-zinc-500"
                             >

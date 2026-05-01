@@ -421,7 +421,7 @@ class ModeratorProjectController extends Controller
 
         $project->delete();
 
-        $disk = Storage::disk('public');
+        $disk = Storage::disk('s3');
         foreach ($paths as $path) {
             if ($disk->exists($path)) {
                 $disk->delete($path);

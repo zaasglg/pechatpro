@@ -100,7 +100,7 @@ test('designers can access projects assigned to them for montage', function () {
 });
 
 test('montage users can open assigned montage works page', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -185,7 +185,7 @@ test('montage works page includes selected client photos archive metadata', func
 });
 
 test('montage users can upload ready works for assigned project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -216,11 +216,17 @@ test('montage users can upload ready works for assigned project', function () {
         ->assertRedirect(route('montage.projects.works.show', $project))
         ->assertSessionHas('status', 'Готовые работы успешно загружены.');
 
-    expect($project->montageAssets()->count())->toBe(2);
+    $assets = $project->montageAssets()->get();
+
+    expect($assets)->toHaveCount(2);
+
+    foreach ($assets as $asset) {
+        Storage::disk('s3')->assertExists($asset->path);
+    }
 });
 
 test('montage users can upload raw and svg works for assigned project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -258,7 +264,7 @@ test('montage users can upload raw and svg works for assigned project', function
 });
 
 test('designers can upload raf works for assigned project', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $designer = User::factory()->create([
         'approved_at' => now(),
@@ -295,7 +301,7 @@ test('designers can upload raf works for assigned project', function () {
 });
 
 test('montage users can replace ready work that needs revision', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -315,7 +321,7 @@ test('montage users can replace ready work that needs revision', function () {
         ->responsibleUsers()
         ->sync([$montageUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/old-ready.jpg", 'old-file');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/old-ready.jpg", 'old-file');
 
     $asset = ProjectMontageAsset::factory()->for($project)->create([
         'path' => "project-montage-assets/{$project->id}/old-ready.jpg",
@@ -344,13 +350,13 @@ test('montage users can replace ready work that needs revision', function () {
     expect($asset->original_name)->toBe('new-ready.png');
     expect($asset->mime_type)->toBe('image/png');
     expect($asset->path)->not->toBe("project-montage-assets/{$project->id}/old-ready.jpg");
-    Storage::disk('public')->assertMissing("project-montage-assets/{$project->id}/old-ready.jpg");
-    Storage::disk('public')->assertExists($asset->path);
+    Storage::disk('s3')->assertMissing("project-montage-assets/{$project->id}/old-ready.jpg");
+    Storage::disk('s3')->assertExists($asset->path);
     expect($project->montageAssets()->count())->toBe(1);
 });
 
 test('montage users can replace ready work with raw file format', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -370,7 +376,7 @@ test('montage users can replace ready work with raw file format', function () {
         ->responsibleUsers()
         ->sync([$montageUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/old-ready.jpg", 'old-file');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/old-ready.jpg", 'old-file');
 
     $asset = ProjectMontageAsset::factory()->for($project)->create([
         'path' => "project-montage-assets/{$project->id}/old-ready.jpg",
@@ -398,12 +404,12 @@ test('montage users can replace ready work with raw file format', function () {
 
     expect($asset->original_name)->toBe('new-ready.raf');
     expect($asset->path)->not->toBe("project-montage-assets/{$project->id}/old-ready.jpg");
-    Storage::disk('public')->assertMissing("project-montage-assets/{$project->id}/old-ready.jpg");
-    Storage::disk('public')->assertExists($asset->path);
+    Storage::disk('s3')->assertMissing("project-montage-assets/{$project->id}/old-ready.jpg");
+    Storage::disk('s3')->assertExists($asset->path);
 });
 
 test('montage users can download assigned ready work file', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -421,7 +427,7 @@ test('montage users can download assigned ready work file', function () {
         ->responsibleUsers()
         ->sync([$montageUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'ready-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'ready-image');
 
     $asset = ProjectMontageAsset::factory()->for($project)->create([
         'path' => "project-montage-assets/{$project->id}/ready-1.jpg",
@@ -436,7 +442,7 @@ test('montage users can download assigned ready work file', function () {
 });
 
 test('montage users can download assigned ready works as archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -454,8 +460,8 @@ test('montage users can download assigned ready works as archive', function () {
         ->responsibleUsers()
         ->sync([$montageUser->id]);
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'first-image');
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready-2.jpg", 'second-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready-1.jpg", 'first-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready-2.jpg", 'second-image');
 
     ProjectMontageAsset::factory()->for($project)->create([
         'path' => "project-montage-assets/{$project->id}/ready-1.jpg",
@@ -473,7 +479,7 @@ test('montage users can download assigned ready works as archive', function () {
 });
 
 test('montage users can download selected client photos as archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),
@@ -491,8 +497,8 @@ test('montage users can download selected client photos as archive', function ()
         ->responsibleUsers()
         ->sync([$montageUser->id]);
 
-    Storage::disk('public')->put("project-source-images/{$project->id}/selected-1.jpg", 'selected-1');
-    Storage::disk('public')->put("project-source-images/{$project->id}/selected-2.jpg", 'selected-2');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/selected-1.jpg", 'selected-1');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/selected-2.jpg", 'selected-2');
 
     $firstSourceImage = $project->sourceImages()->create([
         'path' => "project-source-images/{$project->id}/selected-1.jpg",
@@ -524,7 +530,7 @@ test('montage users can download selected client photos as archive', function ()
 });
 
 test('montage users can send project to moderator after uploading ready works', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $montageUser = User::factory()->create([
         'approved_at' => now(),

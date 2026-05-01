@@ -729,7 +729,7 @@ test('moderators can complete project after print user marked printing as ready'
 });
 
 test('moderators can download ready work file', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
@@ -738,7 +738,7 @@ test('moderators can download ready work file', function () {
     $photographer->assignRole('Фотограф');
 
     $project = Project::factory()->for($photographer, 'photographer')->create();
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/moderator-ready.jpg", 'moderator-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/moderator-ready.jpg", 'moderator-image');
 
     $asset = $project->montageAssets()->create([
         'path' => "project-montage-assets/{$project->id}/moderator-ready.jpg",
@@ -754,7 +754,7 @@ test('moderators can download ready work file', function () {
 });
 
 test('moderators can download ready works as archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
@@ -764,8 +764,8 @@ test('moderators can download ready works as archive', function () {
 
     $project = Project::factory()->for($photographer, 'photographer')->create();
 
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/moderator-ready-1.jpg", 'first-image');
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/moderator-ready-2.jpg", 'second-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/moderator-ready-1.jpg", 'first-image');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/moderator-ready-2.jpg", 'second-image');
 
     $project->montageAssets()->createMany([
         [
@@ -831,7 +831,7 @@ test('moderators can see price, download links, and source images on project pag
 });
 
 test('moderators can download source image file', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
@@ -841,7 +841,7 @@ test('moderators can download source image file', function () {
 
     $project = Project::factory()->for($photographer, 'photographer')->create();
 
-    Storage::disk('public')->put("project-source-images/{$project->id}/source-1.jpg", 'source-file');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/source-1.jpg", 'source-file');
 
     $sourceImage = $project->sourceImages()->create([
         'path' => "project-source-images/{$project->id}/source-1.jpg",
@@ -857,7 +857,7 @@ test('moderators can download source image file', function () {
 });
 
 test('moderators can download source images as archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
@@ -867,8 +867,8 @@ test('moderators can download source images as archive', function () {
 
     $project = Project::factory()->for($photographer, 'photographer')->create();
 
-    Storage::disk('public')->put("project-source-images/{$project->id}/source-1.jpg", 'source-file-one');
-    Storage::disk('public')->put("project-source-images/{$project->id}/source-2.jpg", 'source-file-two');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/source-1.jpg", 'source-file-one');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/source-2.jpg", 'source-file-two');
 
     $project->sourceImages()->createMany([
         [
@@ -892,7 +892,7 @@ test('moderators can download source images as archive', function () {
 });
 
 test('moderators can download full project archive', function () {
-    Storage::fake('public');
+    Storage::fake('s3');
 
     $moderator = User::factory()->create();
     $moderator->assignRole('Модератор');
@@ -902,9 +902,9 @@ test('moderators can download full project archive', function () {
 
     $project = Project::factory()->for($photographer, 'photographer')->create();
 
-    Storage::disk('public')->put("project-source-images/{$project->id}/source.jpg", 'source-file');
-    Storage::disk('public')->put("project-montage-assets/{$project->id}/ready.jpg", 'ready-file');
-    Storage::disk('public')->put("project-design-files/{$project->id}/layout.pdf", 'design-file');
+    Storage::disk('s3')->put("project-source-images/{$project->id}/source.jpg", 'source-file');
+    Storage::disk('s3')->put("project-montage-assets/{$project->id}/ready.jpg", 'ready-file');
+    Storage::disk('s3')->put("project-design-files/{$project->id}/layout.pdf", 'design-file');
 
     $project->sourceImages()->create([
         'path' => "project-source-images/{$project->id}/source.jpg",

@@ -118,7 +118,7 @@ abstract class AbstractImagePreviewGenerator
         }
 
         $previewPath = static::previewPathForId($id);
-        $disk = Storage::disk('public');
+        $disk = Storage::disk('s3');
 
         if ($disk->exists($previewPath)) {
             return $previewPath;
@@ -128,8 +128,13 @@ abstract class AbstractImagePreviewGenerator
             return null;
         }
 
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) ?: 'tmp';
+        $tempFile = sys_get_temp_dir().'/'.bin2hex(random_bytes(8)).'.'.$extension;
+
         try {
-            $previewBinary = $this->generatePreviewBinary($disk->path($path));
+            file_put_contents($tempFile, $disk->get($path));
+
+            $previewBinary = $this->generatePreviewBinary($tempFile);
 
             if ($previewBinary === null) {
                 return null;
@@ -144,6 +149,10 @@ abstract class AbstractImagePreviewGenerator
             report($throwable);
 
             return null;
+        } finally {
+            if (is_file($tempFile)) {
+                @unlink($tempFile);
+            }
         }
     }
 
