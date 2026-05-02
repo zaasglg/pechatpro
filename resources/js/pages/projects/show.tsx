@@ -851,6 +851,7 @@ export default function ProjectShow({
                                                         event.key === ' '
                                                     ) {
                                                         event.preventDefault();
+
                                                         if (asset.previewUrl) {
                                                             setActiveImage(
                                                                 asset,

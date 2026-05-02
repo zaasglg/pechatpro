@@ -136,12 +136,17 @@ export default function ProjectCreate({
 
     const handleDesignFileChange = (event: ChangeEvent<HTMLInputElement>) => {
         const selected = Array.from(event.target.files ?? []);
-        if (selected.length === 0) return;
+
+        if (selected.length === 0) {
+return;
+}
+
         form.setData('design_files', [
             ...form.data.design_files,
             ...selected,
         ].slice(0, 5));
         form.clearErrors('design_files');
+
         if (designFileInputRef.current) {
             designFileInputRef.current.value = '';
         }
@@ -159,6 +164,7 @@ export default function ProjectCreate({
 
         if (form.data.design_files.length === 0) {
             form.setError('design_files', 'Загрузите файл дизайна');
+
             return;
         }
 
@@ -201,7 +207,11 @@ export default function ProjectCreate({
         event.preventDefault();
         setIsDragging(false);
         const dropped = Array.from(event.dataTransfer.files);
-        if (dropped.length === 0) return;
+
+        if (dropped.length === 0) {
+return;
+}
+
         form.setData('design_files', [
             ...form.data.design_files,
             ...dropped,
@@ -411,6 +421,7 @@ export default function ProjectCreate({
                                 {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => {
                                     const value = String(n);
                                     const active = form.data.portrait_count === value;
+
                                     return (
                                         <button
                                             key={n}
@@ -569,8 +580,14 @@ function formatCurrency(value: number): string {
 }
 
 function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} Б`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+    if (bytes < 1024) {
+return `${bytes} Б`;
+}
+
+    if (bytes < 1024 * 1024) {
+return `${(bytes / 1024).toFixed(1)} КБ`;
+}
+
     return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
@@ -614,6 +631,7 @@ function OptionPills({
         <div className="flex flex-wrap gap-2">
             {options.map((option) => {
                 const active = option === value;
+
                 return (
                     <button
                         key={option}
@@ -661,6 +679,7 @@ function NumberWithPresets({
             <div className="flex flex-wrap gap-2">
                 {presets.map((preset) => {
                     const active = value === String(preset);
+
                     return (
                         <button
                             key={preset}

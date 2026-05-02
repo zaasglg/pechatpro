@@ -1,6 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
 import { KeyRound, Phone, ShieldCheck, Trash2, UserRound } from 'lucide-react';
-import { FormEventHandler, useMemo, useState } from 'react';
+import type { FormEventHandler} from 'react';
+import { useMemo, useState } from 'react';
 import {
     destroy as destroyUser,
     index as adminUsersIndex,
@@ -64,6 +65,7 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
                 if (!map.has(role)) {
                     map.set(role, []);
                 }
+
                 map.get(role)!.push(user);
             }
         }
@@ -79,7 +81,10 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
     const deleteForm = useForm({});
 
     const handleConfirmDelete = () => {
-        if (userToDelete === null) return;
+        if (userToDelete === null) {
+return;
+}
+
         deleteForm.delete(destroyUser.url(userToDelete.id), {
             preserveScroll: true,
             onSuccess: () => setUserToDelete(null),
@@ -282,7 +287,11 @@ export default function AdminUsersIndex({ users, roles, status }: Props) {
 
             <Dialog
                 open={userToDelete !== null}
-                onOpenChange={(open) => { if (!open) setUserToDelete(null); }}
+                onOpenChange={(open) => {
+ if (!open) {
+setUserToDelete(null);
+} 
+}}
             >
                 <DialogContent className="max-w-md bg-slate-950 text-white">
                     <DialogTitle>Удалить пользователя?</DialogTitle>

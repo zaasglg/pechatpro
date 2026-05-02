@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
-import { cn } from '@/lib/utils';
 import { useTranslations } from '@/hooks/use-translations';
+import { cn } from '@/lib/utils';
 import { update } from '@/routes/locale';
 
 export function LanguageSwitcher({ className }: { className?: string }) {

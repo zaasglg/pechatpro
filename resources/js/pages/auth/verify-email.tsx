@@ -1,6 +1,6 @@
 import { Head, setLayoutProps } from '@inertiajs/react';
-import { useTranslations } from '@/hooks/use-translations';
 import TextLink from '@/components/text-link';
+import { useTranslations } from '@/hooks/use-translations';
 import { logout } from '@/routes';
 
 export default function VerifyEmail() {
