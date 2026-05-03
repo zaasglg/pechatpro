@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
-    isLargeFile,
+    LARGE_FILE_THRESHOLD_BYTES,
     isTooLarge,
     startMultipartUpload,
 } from '@/lib/multipart-upload';
@@ -210,28 +210,30 @@ export default function MontageProjectWorks({
             const abort = new AbortController();
             abortRef.current = abort;
 
+            const totalBytes = files.reduce((s, f) => s + f.size, 0);
+
             setLargeState({
                 ...INITIAL_LARGE_STATE,
                 isActive: true,
                 totalFiles: files.length,
                 currentIndex: 0,
                 currentFileName: files[0]?.name ?? '',
-                bytesTotal: files.reduce((s, f) => s + f.size, 0),
+                bytesTotal: totalBytes,
             });
 
             let allOk = true;
+            let completedBytes = 0;
 
             for (let i = 0; i < files.length; i++) {
                 if (abort.signal.aborted) break;
 
                 const file = files[i];
+                const fileStartBytes = completedBytes;
+
                 setLargeState((prev) => ({
                     ...prev,
                     currentIndex: i,
                     currentFileName: file.name,
-                    percent: 0,
-                    bytesUploaded: 0,
-                    bytesTotal: file.size,
                     error: null,
                 }));
 
@@ -240,16 +242,16 @@ export default function MontageProjectWorks({
                     uploadType: 'montage-asset',
                     projectId: project.id,
                     signal: abort.signal,
-                    onProgress: (percent, bytesUploaded, bytesTotal) => {
+                    onProgress: (_percent, fileBytesUploaded) => {
+                        const totalUploaded = fileStartBytes + fileBytesUploaded;
                         setLargeState((prev) => ({
                             ...prev,
-                            percent,
-                            bytesUploaded,
-                            bytesTotal,
+                            bytesUploaded: totalUploaded,
+                            percent: Math.round((totalUploaded / totalBytes) * 100),
                         }));
                     },
                     onSuccess: () => {
-                        // continue loop
+                        completedBytes += file.size;
                     },
                     onError: (message) => {
                         allOk = false;
@@ -287,8 +289,19 @@ export default function MontageProjectWorks({
         const tooLarge = images.filter(isTooLarge);
         if (tooLarge.length > 0) return;
 
-        if (largeFileUploadEnabled && images.some(isLargeFile)) {
+        // Always use multipart when enabled — avoids sending large batches via Inertia
+        if (largeFileUploadEnabled) {
             void uploadLargeFiles(images);
+            return;
+        }
+
+        // Multipart disabled: guard against batches that would exceed nginx/PHP limits
+        const totalSize = images.reduce((sum, file) => sum + file.size, 0);
+        if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
+            setLargeState({
+                ...INITIAL_LARGE_STATE,
+                error: `Суммарный размер выбранных файлов (${Math.round(totalSize / 1024 / 1024)} МБ) превышает 50 МБ. Выберите меньше файлов за раз.`,
+            });
             return;
         }
 
