@@ -20,6 +20,7 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import { useTranslations } from '@/hooks/use-translations';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +59,14 @@ export default function ClientMontageReviewShow({
         (image) => image.id === activeImageId,
     );
     const activeImage = activeImageIndex >= 0 ? images[activeImageIndex] : null;
+    const {
+        hasMore: hasMoreImages,
+        sentinelRef: imagesSentinelRef,
+        visibleItems: visibleImages,
+    } = useProgressiveList(images, {
+        initialCount: 42,
+        incrementBy: 42,
+    });
     const selectedIds = new Set(
         images
             .filter((image) => image.selectedForRevision)
@@ -130,41 +139,55 @@ export default function ClientMontageReviewShow({
                     )}
 
                     <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
-                            {images.map((image) => {
-                                const isSelected = selectedIds.has(image.id);
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
+                                {visibleImages.map((image) => {
+                                    const isSelected = selectedIds.has(image.id);
 
-                                return (
-                                    <button
-                                        key={image.id}
-                                        type="button"
-                                        title={image.name}
-                                        onClick={() => setActiveImageId(image.id)}
-                                        className={cn(
-                                            'group relative aspect-square overflow-hidden rounded-xl border bg-slate-900/45 text-left transition',
-                                            isSelected
-                                                ? 'border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.24)]'
-                                                : 'border-white/6 hover:border-white/20',
-                                        )}
-                                    >
-                                        <img
-                                            src={image.previewUrl ?? image.url}
-                                            alt={image.name}
-                                            loading="lazy"
-                                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                                        />
-                                        {isSelected && (
-                                            <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
-                                                {t('client_review.card.revision_badge')}
+                                    return (
+                                        <button
+                                            key={image.id}
+                                            type="button"
+                                            title={image.name}
+                                            onClick={() => setActiveImageId(image.id)}
+                                            className={cn(
+                                                'group relative aspect-square overflow-hidden rounded-xl border bg-slate-900/45 text-left transition',
+                                                isSelected
+                                                    ? 'border-emerald-500/60 shadow-[0_0_0_1px_rgba(16,185,129,0.24)]'
+                                                    : 'border-white/6 hover:border-white/20',
+                                            )}
+                                            style={{
+                                                contentVisibility: 'auto',
+                                                containIntrinsicSize: '170px',
+                                            }}
+                                        >
+                                            <img
+                                                src={image.previewUrl ?? image.url}
+                                                alt={image.name}
+                                                loading="lazy"
+                                                decoding="async"
+                                                className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                            />
+                                            {isSelected && (
+                                                <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
+                                                    {t('client_review.card.revision_badge')}
+                                                </span>
+                                            )}
+                                            <span className="pointer-events-none absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                                                <Expand className="h-3 w-3" />
+                                                {t('client_review.card.open')}
                                             </span>
-                                        )}
-                                        <span className="pointer-events-none absolute right-1.5 bottom-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                                            <Expand className="h-3 w-3" />
-                                            {t('client_review.card.open')}
-                                        </span>
-                                    </button>
-                                );
-                            })}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {hasMoreImages && (
+                                <div
+                                    ref={imagesSentinelRef}
+                                    className="h-10"
+                                    aria-hidden="true"
+                                />
+                            )}
                         </div>
 
                         <aside className="space-y-4">
@@ -278,6 +301,7 @@ export default function ClientMontageReviewShow({
                                 <img
                                     src={activeImage.previewUrl ?? activeImage.url}
                                     alt={activeImage.name}
+                                    decoding="async"
                                     className="h-auto max-h-[72vh] w-auto max-w-full rounded-xl object-contain"
                                 />
 

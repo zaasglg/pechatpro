@@ -18,6 +18,7 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 
 type ProjectSummary = {
     id: number;
@@ -77,6 +78,14 @@ export default function PrintProjectShow({
         () => readyWorks.find((work) => work.id === activeWorkId) ?? null,
         [activeWorkId, readyWorks],
     );
+    const {
+        hasMore: hasMoreReadyWorks,
+        sentinelRef: readyWorksSentinelRef,
+        visibleItems: visibleReadyWorks,
+    } = useProgressiveList(readyWorks, {
+        initialCount: 48,
+        incrementBy: 48,
+    });
 
     return (
         <>
@@ -192,11 +201,15 @@ export default function PrintProjectShow({
                     )}
 
                     <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-                        {readyWorks.map((work) => (
+                        {visibleReadyWorks.map((work) => (
                             <button
                                 key={work.id}
                                 type="button"
                                 className="group overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 text-left transition hover:border-emerald-500/40 hover:bg-slate-900/60"
+                                style={{
+                                    contentVisibility: 'auto',
+                                    containIntrinsicSize: '170px',
+                                }}
                                 onClick={() => setActiveWorkId(work.id)}
                             >
                                 <div className="aspect-square overflow-hidden bg-black/40">
@@ -205,6 +218,7 @@ export default function PrintProjectShow({
                                             src={work.previewUrl}
                                             alt={work.name}
                                             loading="lazy"
+                                            decoding="async"
                                             className="h-full w-full object-cover transition group-hover:scale-105"
                                         />
                                     ) : (
@@ -224,6 +238,13 @@ export default function PrintProjectShow({
                             </button>
                         ))}
                     </div>
+                    {hasMoreReadyWorks && (
+                        <div
+                            ref={readyWorksSentinelRef}
+                            className="h-10"
+                            aria-hidden="true"
+                        />
+                    )}
                 </section>
             </div>
 
@@ -248,6 +269,7 @@ export default function PrintProjectShow({
                                     <img
                                         src={activeWork.previewUrl}
                                         alt={activeWork.name}
+                                        decoding="async"
                                         className="h-auto max-h-[72vh] w-auto max-w-full rounded-xl object-contain"
                                     />
                                 ) : (

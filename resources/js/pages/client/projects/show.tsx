@@ -17,6 +17,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import { useTranslations } from '@/hooks/use-translations';
 import {
     getClientSelectionDeadlineState,
@@ -89,6 +90,14 @@ export default function ClientProjectShow({
         () => new Map(images.map((image) => [image.id, image])),
         [images],
     );
+    const {
+        hasMore: hasMoreImages,
+        sentinelRef: imagesSentinelRef,
+        visibleItems: visibleImages,
+    } = useProgressiveList(images, {
+        initialCount: 36,
+        incrementBy: 36,
+    });
     const selectedCount = form.data.selected_image_ids.length;
     const isLimitReached = project.remainingStudentsCount <= 0;
     const isDeadlineExpired =
@@ -381,7 +390,7 @@ export default function ClientProjectShow({
 
                             {images.length > 0 ? (
                                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                                    {images.map((image) => {
+                                    {visibleImages.map((image) => {
                                         const isSelected = selectedIds.has(image.id);
                                         const isDisabled =
                                             isClosed ||
@@ -424,12 +433,19 @@ export default function ClientProjectShow({
                                                     !isDisabled &&
                                                         'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
                                                 )}
+                                                style={{
+                                                    contentVisibility: 'auto',
+                                                    containIntrinsicSize:
+                                                        '260px',
+                                                }}
                                             >
                                                 <div className="relative aspect-[4/5] bg-black/30">
                                                     {image.previewUrl || image.url ? (
                                                         <img
                                                             src={image.previewUrl ?? image.url}
                                                             alt={image.name}
+                                                            loading="lazy"
+                                                            decoding="async"
                                                             className={cn(
                                                                 'h-full w-full object-cover transition duration-500',
                                                                 isSelected
@@ -493,6 +509,13 @@ export default function ClientProjectShow({
                                     {t('client_selection.empty')}
                                 </div>
                             )}
+                            {hasMoreImages && (
+                                <div
+                                    ref={imagesSentinelRef}
+                                    className="h-10"
+                                    aria-hidden="true"
+                                />
+                            )}
                         </section>
                     )}
                 </div>
@@ -521,6 +544,7 @@ export default function ClientProjectShow({
                                 <img
                                     src={previewImage.previewUrl ?? previewImage.url}
                                     alt={previewImage.name}
+                                    decoding="async"
                                     className="max-h-[75vh] w-full object-contain"
                                 />
                             </div>
@@ -641,6 +665,8 @@ function SelectionSlot({
                     <img
                         src={image.previewUrl ?? image.url}
                         alt={image.name}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />

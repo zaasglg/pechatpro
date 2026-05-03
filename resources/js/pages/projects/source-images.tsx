@@ -16,6 +16,7 @@ import InputError from '@/components/input-error';
 import ProjectSourceImageViewer from '@/components/project-source-image-viewer';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import { cn } from '@/lib/utils';
 import {
     LARGE_FILE_THRESHOLD_BYTES,
@@ -109,6 +110,14 @@ export default function ProjectSourceImages({
     const [activeImage, setActiveImage] = useState<SourceImageItem | null>(null);
     const [selectedPreviews, setSelectedPreviews] = useState<SelectedImagePreview[]>([]);
     const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
+    const {
+        hasMore: hasMoreSourceImages,
+        sentinelRef: sourceImagesSentinelRef,
+        visibleItems: visibleSourceImages,
+    } = useProgressiveList(sourceImages, {
+        initialCount: 30,
+        incrementBy: 30,
+    });
 
     const completeStageForm = useForm<Record<string, never>>({});
     const { setData, post, processing, progress, errors, reset, clearErrors } =
@@ -513,11 +522,15 @@ export default function ProjectSourceImages({
                                 </div>
                             ) : (
                                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                                    {sourceImages.map((image) => (
+                                    {visibleSourceImages.map((image) => (
                                         <button
                                             key={image.id}
                                             type="button"
                                             className="group overflow-hidden rounded-[1.5rem] border border-white/6 bg-slate-900/45 text-left transition hover:border-emerald-500/25 hover:bg-slate-900/60"
+                                            style={{
+                                                contentVisibility: 'auto',
+                                                containIntrinsicSize: '320px',
+                                            }}
                                             onClick={() => {
                                                 if (image.previewUrl) {
                                                     setActiveImage(image);
@@ -547,6 +560,13 @@ export default function ProjectSourceImages({
                                         </button>
                                     ))}
                                 </div>
+                            )}
+                            {hasMoreSourceImages && (
+                                <div
+                                    ref={sourceImagesSentinelRef}
+                                    className="h-10"
+                                    aria-hidden="true"
+                                />
                             )}
                         </div>
                     </div>
@@ -682,6 +702,8 @@ function PreviewThumb({
             <img
                 src={resolvedPreviewUrl}
                 alt={name}
+                loading="lazy"
+                decoding="async"
                 className={cn('h-14 w-14 rounded-xl object-cover', className)}
             />
         );

@@ -31,6 +31,7 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import { cn } from '@/lib/utils';
 import {
     LARGE_FILE_THRESHOLD_BYTES,
@@ -155,6 +156,14 @@ export default function MontageProjectWorks({
     const [activeImage, setActiveImage] = useState<MontageAssetItem | null>(null);
     const [selectedPreviews, setSelectedPreviews] = useState<SelectedImagePreview[]>([]);
     const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
+    const {
+        hasMore: hasMoreMontageAssets,
+        sentinelRef: montageAssetsSentinelRef,
+        visibleItems: visibleMontageAssets,
+    } = useProgressiveList(montageAssets, {
+        initialCount: 48,
+        incrementBy: 48,
+    });
 
     const completeStageForm = useForm<Record<string, never>>({});
     const replaceForm = useForm<ReplaceMontageAssetForm>({ image: null });
@@ -608,7 +617,7 @@ export default function MontageProjectWorks({
 
                         {montageAssets.length > 0 && (
                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-                                {montageAssets.map((asset) => {
+                                {visibleMontageAssets.map((asset) => {
                                     const thumbSrc =
                                         asset.previewUrl ??
                                         (canRenderImagePreview(asset.name, asset.mimeType)
@@ -621,6 +630,10 @@ export default function MontageProjectWorks({
                                             type="button"
                                             title={`${asset.name} · ${formatBytes(asset.sizeBytes)}`}
                                             className="group relative aspect-square overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 text-left transition hover:border-emerald-500/40"
+                                            style={{
+                                                contentVisibility: 'auto',
+                                                containIntrinsicSize: '170px',
+                                            }}
                                             onClick={() => setActiveImage(asset)}
                                         >
                                             {thumbSrc ? (
@@ -628,6 +641,7 @@ export default function MontageProjectWorks({
                                                     src={thumbSrc}
                                                     alt={asset.name}
                                                     loading="lazy"
+                                                    decoding="async"
                                                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                                 />
                                             ) : (
@@ -647,6 +661,13 @@ export default function MontageProjectWorks({
                                     );
                                 })}
                             </div>
+                        )}
+                        {hasMoreMontageAssets && (
+                            <div
+                                ref={montageAssetsSentinelRef}
+                                className="h-10"
+                                aria-hidden="true"
+                            />
                         )}
                     </div>
 
@@ -707,6 +728,7 @@ export default function MontageProjectWorks({
                                 <img
                                     src={activeImage.previewUrl ?? activeImage.url}
                                     alt={activeImage.name}
+                                    decoding="async"
                                     className="mt-2 max-h-[75vh] w-full rounded-2xl object-contain"
                                 />
                             ) : (

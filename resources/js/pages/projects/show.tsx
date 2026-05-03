@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClipboard } from '@/hooks/use-clipboard';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import {
     LARGE_FILE_THRESHOLD_BYTES,
     isTooLarge,
@@ -385,6 +386,22 @@ export default function ProjectShow({
         .filter(([key]) => key.startsWith('images.'))
         .map(([, value]) => value);
     const isUploadingAny = processing || largeState.isActive;
+    const {
+        hasMore: hasMoreSourceImages,
+        sentinelRef: sourceImagesSentinelRef,
+        visibleItems: visibleSourceImages,
+    } = useProgressiveList(sourceImages, {
+        initialCount: 30,
+        incrementBy: 30,
+    });
+    const {
+        hasMore: hasMoreDesignerAssets,
+        sentinelRef: designerAssetsSentinelRef,
+        visibleItems: visibleDesignerAssets,
+    } = useProgressiveList(designerAssets, {
+        initialCount: 30,
+        incrementBy: 30,
+    });
 
     const handleDeleteSourceImage = () => {
         if (imagePendingDeletion === null) {
@@ -895,10 +912,15 @@ export default function ProjectShow({
                                     </div>
                                 ) : (
                                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                                        {sourceImages.map((image) => (
+                                        {visibleSourceImages.map((image) => (
                                             <div
                                                 key={image.id}
                                                 className="group relative overflow-hidden rounded-[1.5rem] border border-white/6 bg-slate-900/45 transition hover:border-emerald-500/25 hover:bg-slate-900/60"
+                                                style={{
+                                                    contentVisibility: 'auto',
+                                                    containIntrinsicSize:
+                                                        '320px',
+                                                }}
                                             >
                                                 <button
                                                     type="button"
@@ -970,6 +992,13 @@ export default function ProjectShow({
                                         ))}
                                     </div>
                                 )}
+                                {hasMoreSourceImages && (
+                                    <div
+                                        ref={sourceImagesSentinelRef}
+                                        className="h-10"
+                                        aria-hidden="true"
+                                    />
+                                )}
                             </div>
                         </TabsContent>
 
@@ -990,10 +1019,14 @@ export default function ProjectShow({
                                 </div>
 
                                 <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                                    {designerAssets.map((asset) => (
+                                    {visibleDesignerAssets.map((asset) => (
                                         <div
                                             key={asset.id}
                                             className="group relative overflow-hidden rounded-[1.5rem] border border-white/6 bg-slate-900/45 transition hover:border-emerald-500/25 hover:bg-slate-900/60"
+                                            style={{
+                                                contentVisibility: 'auto',
+                                                containIntrinsicSize: '320px',
+                                            }}
                                         >
                                             <div
                                                 role="button"
@@ -1073,6 +1106,13 @@ export default function ProjectShow({
                                         </div>
                                     ))}
                                 </div>
+                                {hasMoreDesignerAssets && (
+                                    <div
+                                        ref={designerAssetsSentinelRef}
+                                        className="h-10"
+                                        aria-hidden="true"
+                                    />
+                                )}
                             </TabsContent>
                         )}
                     </Tabs>
@@ -1421,6 +1461,8 @@ function PreviewThumb({
             <img
                 src={resolvedPreviewUrl}
                 alt={name}
+                loading="lazy"
+                decoding="async"
                 className={cn('h-14 w-14 rounded-xl object-cover', className)}
             />
         );

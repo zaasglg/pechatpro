@@ -53,6 +53,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClipboard } from '@/hooks/use-clipboard';
+import { useProgressiveList } from '@/hooks/use-progressive-list';
 import {
     currentDateTimeLocalValue,
     toDateTimeLocalValue,
@@ -183,6 +184,14 @@ export default function ModeratorProjectShow({
     } | null>(null);
     const [sourcePreview, setSourcePreview] = useState<SourceImage | null>(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const {
+        hasMore: hasMoreSourceImages,
+        sentinelRef: sourceImagesSentinelRef,
+        visibleItems: visibleSourceImages,
+    } = useProgressiveList(sourceImages, {
+        initialCount: 48,
+        incrementBy: 48,
+    });
     const deleteForm = useForm<Record<string, never>>({});
     const form = useForm<{
         selection_deadline_at: string;
@@ -676,18 +685,24 @@ export default function ModeratorProjectShow({
                         <TabsContent value="source-images" className="mt-0">
                             {sourceImages.length > 0 ? (
                                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-                                    {sourceImages.map((image) => (
+                                    {visibleSourceImages.map((image) => (
                                         <button
                                             key={image.id}
                                             type="button"
                                             onClick={() => setSourcePreview(image)}
                                             className="group relative aspect-square overflow-hidden rounded-xl border border-white/8 bg-slate-950/45 transition hover:border-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                                             aria-label={image.name}
+                                            style={{
+                                                contentVisibility: 'auto',
+                                                containIntrinsicSize: '170px',
+                                            }}
                                         >
                                             {image.previewUrl ? (
                                                 <img
                                                     src={image.previewUrl}
                                                     alt={image.name}
+                                                    loading="lazy"
+                                                    decoding="async"
                                                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                                 />
                                             ) : (
@@ -705,6 +720,13 @@ export default function ModeratorProjectShow({
                                 <div className="rounded-2xl border border-dashed border-white/10 px-4 py-8 text-sm text-zinc-500">
                                     Исходники еще не загружены.
                                 </div>
+                            )}
+                            {hasMoreSourceImages && (
+                                <div
+                                    ref={sourceImagesSentinelRef}
+                                    className="h-10"
+                                    aria-hidden="true"
+                                />
                             )}
                         </TabsContent>
                     </Tabs>
@@ -1087,6 +1109,7 @@ export default function ModeratorProjectShow({
                                                                             }
                                                                             className="h-full w-full object-cover transition group-hover:scale-105"
                                                                             loading="lazy"
+                                                                            decoding="async"
                                                                         />
                                                                     </button>
                                                                 ),

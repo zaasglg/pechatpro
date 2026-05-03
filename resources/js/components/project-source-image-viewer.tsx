@@ -60,6 +60,7 @@ export default function ProjectSourceImageViewer({
                                 <img
                                     src={image.previewUrl ?? image.url}
                                     alt={image.name}
+                                    decoding="async"
                                     className="h-auto max-h-full w-auto max-w-full object-contain"
                                 />
                             </div>
