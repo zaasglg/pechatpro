@@ -3,6 +3,7 @@ import {
     ChevronLeft,
     ChevronRight,
     Expand,
+    ImageIcon,
     Send,
     WandSparkles,
 } from 'lucide-react';
@@ -61,11 +62,12 @@ export default function ClientMontageReviewShow({
     const activeImage = activeImageIndex >= 0 ? images[activeImageIndex] : null;
     const {
         hasMore: hasMoreImages,
-        sentinelRef: imagesSentinelRef,
+        loadMore: loadMoreImages,
+        remainingCount: remainingImagesCount,
         visibleItems: visibleImages,
     } = useProgressiveList(images, {
-        initialCount: 42,
-        incrementBy: 42,
+        initialCount: 50,
+        incrementBy: 50,
     });
     const selectedIds = new Set(
         images
@@ -161,13 +163,20 @@ export default function ClientMontageReviewShow({
                                                 containIntrinsicSize: '170px',
                                             }}
                                         >
-                                            <img
-                                                src={image.previewUrl ?? image.url}
-                                                alt={image.name}
-                                                loading="lazy"
-                                                decoding="async"
-                                                className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                                            />
+                                            {image.previewUrl ? (
+                                                <img
+                                                    src={image.previewUrl}
+                                                    alt={image.name}
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                    fetchPriority="low"
+                                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-zinc-600">
+                                                    <ImageIcon className="h-8 w-8" />
+                                                </div>
+                                            )}
                                             {isSelected && (
                                                 <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
                                                     {t('client_review.card.revision_badge')}
@@ -182,10 +191,9 @@ export default function ClientMontageReviewShow({
                                 })}
                             </div>
                             {hasMoreImages && (
-                                <div
-                                    ref={imagesSentinelRef}
-                                    className="h-10"
-                                    aria-hidden="true"
+                                <LoadMoreImagesButton
+                                    remainingCount={remainingImagesCount}
+                                    onClick={loadMoreImages}
                                 />
                             )}
                         </div>
@@ -412,6 +420,27 @@ export default function ClientMontageReviewShow({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-slate-950/50 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
     );
 }
 

@@ -92,11 +92,12 @@ export default function ClientProjectShow({
     );
     const {
         hasMore: hasMoreImages,
-        sentinelRef: imagesSentinelRef,
+        loadMore: loadMoreImages,
+        remainingCount: remainingImagesCount,
         visibleItems: visibleImages,
     } = useProgressiveList(images, {
-        initialCount: 36,
-        incrementBy: 36,
+        initialCount: 50,
+        incrementBy: 50,
     });
     const selectedCount = form.data.selected_image_ids.length;
     const isLimitReached = project.remainingStudentsCount <= 0;
@@ -440,12 +441,13 @@ export default function ClientProjectShow({
                                                 }}
                                             >
                                                 <div className="relative aspect-[4/5] bg-black/30">
-                                                    {image.previewUrl || image.url ? (
+                                                    {image.previewUrl ? (
                                                         <img
-                                                            src={image.previewUrl ?? image.url}
+                                                            src={image.previewUrl}
                                                             alt={image.name}
                                                             loading="lazy"
                                                             decoding="async"
+                                                            fetchPriority="low"
                                                             className={cn(
                                                                 'h-full w-full object-cover transition duration-500',
                                                                 isSelected
@@ -510,10 +512,9 @@ export default function ClientProjectShow({
                                 </div>
                             )}
                             {hasMoreImages && (
-                                <div
-                                    ref={imagesSentinelRef}
-                                    className="h-10"
-                                    aria-hidden="true"
+                                <LoadMoreImagesButton
+                                    remainingCount={remainingImagesCount}
+                                    onClick={loadMoreImages}
                                 />
                             )}
                         </section>
@@ -619,6 +620,27 @@ function QuoteBlock({
     );
 }
 
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-slate-950/50 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
+    );
+}
+
 function TimerBadge({
     value,
     isExpired,
@@ -662,13 +684,20 @@ function SelectionSlot({
         >
             {image ? (
                 <div className="relative aspect-[4/5]">
-                    <img
-                        src={image.previewUrl ?? image.url}
-                        alt={image.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="h-full w-full object-cover"
-                    />
+                    {image.previewUrl ? (
+                        <img
+                            src={image.previewUrl}
+                            alt={image.name}
+                            loading="lazy"
+                            decoding="async"
+                            fetchPriority="low"
+                            className="h-full w-full object-cover"
+                        />
+                    ) : (
+                        <div className="flex h-full w-full items-center justify-center text-slate-600">
+                            <ImageIcon className="h-8 w-8" />
+                        </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
                     <button
                         type="button"

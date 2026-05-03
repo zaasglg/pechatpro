@@ -1,58 +1,35 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type ProgressiveListOptions = {
     initialCount?: number;
     incrementBy?: number;
-    rootMargin?: string;
 };
 
 export function useProgressiveList<T>(
     items: T[],
     {
-        initialCount = 40,
-        incrementBy = 40,
-        rootMargin = '900px',
+        initialCount = 50,
+        incrementBy = 50,
     }: ProgressiveListOptions = {},
 ) {
     const [visibleCount, setVisibleCount] = useState(() =>
         Math.min(items.length, initialCount),
     );
-    const sentinelRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         setVisibleCount(Math.min(items.length, initialCount));
     }, [initialCount, items.length]);
 
-    useEffect(() => {
-        const sentinel = sentinelRef.current;
-
-        if (!sentinel || visibleCount >= items.length) {
-            return;
-        }
-
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (!entries.some((entry) => entry.isIntersecting)) {
-                    return;
-                }
-
-                setVisibleCount((current) =>
-                    Math.min(items.length, current + incrementBy),
-                );
-            },
-            { rootMargin },
+    const loadMore = () => {
+        setVisibleCount((current) =>
+            Math.min(items.length, current + incrementBy),
         );
-
-        observer.observe(sentinel);
-
-        return () => {
-            observer.disconnect();
-        };
-    }, [incrementBy, items.length, rootMargin, visibleCount]);
+    };
 
     return {
         hasMore: visibleCount < items.length,
-        sentinelRef,
+        loadMore,
+        remainingCount: Math.max(0, items.length - visibleCount),
         visibleItems: items.slice(0, visibleCount),
     };
 }

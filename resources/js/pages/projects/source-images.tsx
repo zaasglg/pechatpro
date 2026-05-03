@@ -112,11 +112,12 @@ export default function ProjectSourceImages({
     const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
     const {
         hasMore: hasMoreSourceImages,
-        sentinelRef: sourceImagesSentinelRef,
+        loadMore: loadMoreSourceImages,
+        remainingCount: remainingSourceImagesCount,
         visibleItems: visibleSourceImages,
     } = useProgressiveList(sourceImages, {
-        initialCount: 30,
-        incrementBy: 30,
+        initialCount: 50,
+        incrementBy: 50,
     });
 
     const completeStageForm = useForm<Record<string, never>>({});
@@ -562,10 +563,9 @@ export default function ProjectSourceImages({
                                 </div>
                             )}
                             {hasMoreSourceImages && (
-                                <div
-                                    ref={sourceImagesSentinelRef}
-                                    className="h-10"
-                                    aria-hidden="true"
+                                <LoadMoreImagesButton
+                                    remainingCount={remainingSourceImagesCount}
+                                    onClick={loadMoreSourceImages}
                                 />
                             )}
                         </div>
@@ -581,6 +581,27 @@ export default function ProjectSourceImages({
                 }}
             />
         </>
+    );
+}
+
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-white/5 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
     );
 }
 
@@ -694,8 +715,7 @@ function PreviewThumb({
     mimeType?: string | null;
     className?: string;
 }) {
-    const resolvedPreviewUrl =
-        previewUrl ?? (canRenderImagePreview(name, mimeType) ? url : null);
+    const resolvedPreviewUrl = previewUrl;
 
     if (resolvedPreviewUrl) {
         return (
@@ -704,6 +724,7 @@ function PreviewThumb({
                 alt={name}
                 loading="lazy"
                 decoding="async"
+                fetchPriority="low"
                 className={cn('h-14 w-14 rounded-xl object-cover', className)}
             />
         );

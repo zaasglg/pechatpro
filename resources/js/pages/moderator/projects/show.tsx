@@ -162,6 +162,27 @@ type Props = {
     status?: string | null;
 };
 
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-white/5 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
+    );
+}
+
 export default function ModeratorProjectShow({
     project,
     sourceImages,
@@ -186,11 +207,21 @@ export default function ModeratorProjectShow({
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const {
         hasMore: hasMoreSourceImages,
-        sentinelRef: sourceImagesSentinelRef,
+        loadMore: loadMoreSourceImages,
+        remainingCount: remainingSourceImagesCount,
         visibleItems: visibleSourceImages,
     } = useProgressiveList(sourceImages, {
-        initialCount: 48,
-        incrementBy: 48,
+        initialCount: 50,
+        incrementBy: 50,
+    });
+    const {
+        hasMore: hasMoreMontageAssets,
+        loadMore: loadMoreMontageAssets,
+        remainingCount: remainingMontageAssetsCount,
+        visibleItems: visibleMontageAssets,
+    } = useProgressiveList(montageAssets, {
+        initialCount: 50,
+        incrementBy: 50,
     });
     const deleteForm = useForm<Record<string, never>>({});
     const form = useForm<{
@@ -307,36 +338,50 @@ export default function ModeratorProjectShow({
 
     const montageAssetsGallery =
         montageAssets.length > 0 ? (
-            <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
-                {montageAssets.map((asset) => (
-                    <button
-                        key={asset.id}
-                        type="button"
-                        title={asset.name}
-                        className="group relative aspect-square overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 transition hover:border-emerald-500/40"
-                        onClick={() => setActiveMontageAssetId(asset.id)}
-                    >
-                        {asset.previewUrl ? (
-                            <img
-                                src={asset.previewUrl}
-                                alt={asset.name}
-                                loading="lazy"
-                                className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                            />
-                        ) : (
-                            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400">
-                                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase">
-                                    {(asset.name.split('.').pop() ?? '').toUpperCase() || 'FILE'}
+            <div className="mt-5 space-y-4">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
+                    {visibleMontageAssets.map((asset) => (
+                        <button
+                            key={asset.id}
+                            type="button"
+                            title={asset.name}
+                            className="group relative aspect-square overflow-hidden rounded-xl border border-white/6 bg-slate-900/45 transition hover:border-emerald-500/40"
+                            style={{
+                                contentVisibility: 'auto',
+                                containIntrinsicSize: '170px',
+                            }}
+                            onClick={() => setActiveMontageAssetId(asset.id)}
+                        >
+                            {asset.previewUrl ? (
+                                <img
+                                    src={asset.previewUrl}
+                                    alt={asset.name}
+                                    loading="lazy"
+                                    decoding="async"
+                                    fetchPriority="low"
+                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                                />
+                            ) : (
+                                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400">
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase">
+                                        {(asset.name.split('.').pop() ?? '').toUpperCase() || 'FILE'}
+                                    </span>
+                                </div>
+                            )}
+                            {asset.requestedForRevision && (
+                                <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
+                                    Правка
                                 </span>
-                            </div>
-                        )}
-                        {asset.requestedForRevision && (
-                            <span className="pointer-events-none absolute top-1.5 left-1.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-medium text-white shadow-lg shadow-emerald-500/20">
-                                Правка
-                            </span>
-                        )}
-                    </button>
-                ))}
+                            )}
+                        </button>
+                    ))}
+                </div>
+                {hasMoreMontageAssets && (
+                    <LoadMoreImagesButton
+                        remainingCount={remainingMontageAssetsCount}
+                        onClick={loadMoreMontageAssets}
+                    />
+                )}
             </div>
         ) : null;
 
@@ -703,6 +748,7 @@ export default function ModeratorProjectShow({
                                                     alt={image.name}
                                                     loading="lazy"
                                                     decoding="async"
+                                                    fetchPriority="low"
                                                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                                 />
                                             ) : (
@@ -722,10 +768,9 @@ export default function ModeratorProjectShow({
                                 </div>
                             )}
                             {hasMoreSourceImages && (
-                                <div
-                                    ref={sourceImagesSentinelRef}
-                                    className="h-10"
-                                    aria-hidden="true"
+                                <LoadMoreImagesButton
+                                    remainingCount={remainingSourceImagesCount}
+                                    onClick={loadMoreSourceImages}
                                 />
                             )}
                         </TabsContent>
@@ -1099,18 +1144,24 @@ export default function ModeratorProjectShow({
                                                                         }
                                                                         className="group relative aspect-square overflow-hidden rounded-lg border border-white/6 bg-black/40 transition hover:border-emerald-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                                                                     >
-                                                                        <img
-                                                                            src={
-                                                                                image.previewUrl ??
-                                                                                image.url
-                                                                            }
-                                                                            alt={
-                                                                                image.name
-                                                                            }
-                                                                            className="h-full w-full object-cover transition group-hover:scale-105"
-                                                                            loading="lazy"
-                                                                            decoding="async"
-                                                                        />
+                                                                        {image.previewUrl ? (
+                                                                            <img
+                                                                                src={
+                                                                                    image.previewUrl
+                                                                                }
+                                                                                alt={
+                                                                                    image.name
+                                                                                }
+                                                                                className="h-full w-full object-cover transition group-hover:scale-105"
+                                                                                loading="lazy"
+                                                                                decoding="async"
+                                                                                fetchPriority="low"
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="flex h-full w-full items-center justify-center text-zinc-500">
+                                                                                <ImageIcon className="h-6 w-6" />
+                                                                            </div>
+                                                                        )}
                                                                     </button>
                                                                 ),
                                                             )}

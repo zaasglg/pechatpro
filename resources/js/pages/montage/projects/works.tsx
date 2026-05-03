@@ -158,11 +158,12 @@ export default function MontageProjectWorks({
     const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
     const {
         hasMore: hasMoreMontageAssets,
-        sentinelRef: montageAssetsSentinelRef,
+        loadMore: loadMoreMontageAssets,
+        remainingCount: remainingMontageAssetsCount,
         visibleItems: visibleMontageAssets,
     } = useProgressiveList(montageAssets, {
-        initialCount: 48,
-        incrementBy: 48,
+        initialCount: 50,
+        incrementBy: 50,
     });
 
     const completeStageForm = useForm<Record<string, never>>({});
@@ -618,11 +619,7 @@ export default function MontageProjectWorks({
                         {montageAssets.length > 0 && (
                             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8">
                                 {visibleMontageAssets.map((asset) => {
-                                    const thumbSrc =
-                                        asset.previewUrl ??
-                                        (canRenderImagePreview(asset.name, asset.mimeType)
-                                            ? asset.url
-                                            : null);
+                                    const thumbSrc = asset.previewUrl;
 
                                     return (
                                         <button
@@ -642,6 +639,7 @@ export default function MontageProjectWorks({
                                                     alt={asset.name}
                                                     loading="lazy"
                                                     decoding="async"
+                                                    fetchPriority="low"
                                                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
                                                 />
                                             ) : (
@@ -663,10 +661,9 @@ export default function MontageProjectWorks({
                             </div>
                         )}
                         {hasMoreMontageAssets && (
-                            <div
-                                ref={montageAssetsSentinelRef}
-                                className="h-10"
-                                aria-hidden="true"
+                            <LoadMoreImagesButton
+                                remainingCount={remainingMontageAssetsCount}
+                                onClick={loadMoreMontageAssets}
                             />
                         )}
                     </div>
@@ -792,6 +789,27 @@ export default function MontageProjectWorks({
                 </DialogContent>
             </Dialog>
         </>
+    );
+}
+
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-white/5 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
     );
 }
 

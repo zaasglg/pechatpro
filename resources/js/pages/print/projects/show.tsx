@@ -54,6 +54,27 @@ function formatFileSize(sizeBytes: number): string {
     return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`;
 }
 
+function LoadMoreImagesButton({
+    remainingCount,
+    onClick,
+}: {
+    remainingCount: number;
+    onClick: () => void;
+}) {
+    return (
+        <div className="flex justify-center pt-2">
+            <Button
+                type="button"
+                variant="outline"
+                className="rounded-full border-white/10 bg-white/5 px-5 text-white hover:bg-white/10"
+                onClick={onClick}
+            >
+                Показать ещё {Math.min(50, remainingCount)}
+            </Button>
+        </div>
+    );
+}
+
 export default function PrintProjectShow({
     project,
     readyWorks,
@@ -80,11 +101,12 @@ export default function PrintProjectShow({
     );
     const {
         hasMore: hasMoreReadyWorks,
-        sentinelRef: readyWorksSentinelRef,
+        loadMore: loadMoreReadyWorks,
+        remainingCount: remainingReadyWorksCount,
         visibleItems: visibleReadyWorks,
     } = useProgressiveList(readyWorks, {
-        initialCount: 48,
-        incrementBy: 48,
+        initialCount: 50,
+        incrementBy: 50,
     });
 
     return (
@@ -219,6 +241,7 @@ export default function PrintProjectShow({
                                             alt={work.name}
                                             loading="lazy"
                                             decoding="async"
+                                            fetchPriority="low"
                                             className="h-full w-full object-cover transition group-hover:scale-105"
                                         />
                                     ) : (
@@ -239,10 +262,9 @@ export default function PrintProjectShow({
                         ))}
                     </div>
                     {hasMoreReadyWorks && (
-                        <div
-                            ref={readyWorksSentinelRef}
-                            className="h-10"
-                            aria-hidden="true"
+                        <LoadMoreImagesButton
+                            remainingCount={remainingReadyWorksCount}
+                            onClick={loadMoreReadyWorks}
                         />
                     )}
                 </section>
