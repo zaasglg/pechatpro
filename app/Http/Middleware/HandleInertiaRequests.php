@@ -61,6 +61,7 @@ class HandleInertiaRequests extends Middleware
                 'toast' => fn (): ?array => $this->flashToast($request),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'largeFileUploadEnabled' => (bool) config('uploads.large_file_enabled'),
         ];
     }
 

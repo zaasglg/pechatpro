@@ -17,6 +17,7 @@ use App\Http\Controllers\ProjectMontageAssetController;
 use App\Http\Controllers\ProjectMontageDownloadController;
 use App\Http\Controllers\ProjectMontageReviewController;
 use App\Http\Controllers\ProjectSourceImageController;
+use App\Http\Controllers\UploadController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\Features;
@@ -44,11 +45,28 @@ Route::get('/test-s3', function () {
     }
 });
 
+Route::get('/debug-s3', function () {
+    return [
+        'env_region' => env('AWS_DEFAULT_REGION'),
+        'config_region' => config('filesystems.disks.s3.region'),
+        'endpoint' => config('filesystems.disks.s3.endpoint'),
+    ];
+});
+
 Route::get('/test-s3-permanent', function () {
     // Загружаем файл, но НЕ удаляем его
     Storage::disk('s3')->put('hello_world.txt', 'Этот файл останется в бакете!');
 
     return 'Файл загружен. Проверьте панель IDrive e2!';
+});
+
+Route::middleware('auth')->prefix('uploads')->as('uploads.')->group(function (): void {
+    Route::post('multipart/create', [UploadController::class, 'createMultipart'])->name('multipart.create');
+    Route::get('multipart/{uploadId}/sign', [UploadController::class, 'signPart'])->name('multipart.sign');
+    Route::get('multipart/{uploadId}/parts', [UploadController::class, 'listParts'])->name('multipart.parts');
+    Route::post('multipart/{uploadId}/complete', [UploadController::class, 'completeMultipart'])->name('multipart.complete');
+    Route::delete('multipart/{uploadId}/abort', [UploadController::class, 'abortMultipart'])->name('multipart.abort');
+    Route::post('{uploadId}/finalize', [UploadController::class, 'finalize'])->name('finalize');
 });
 
 Route::middleware('auth')->group(function () {

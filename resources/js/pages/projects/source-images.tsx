@@ -1,7 +1,7 @@
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
-import { ArrowLeft, CheckCircle2, File, ImagePlus, Upload } from 'lucide-react';
+import { Head, Link, router, setLayoutProps, usePage, useForm } from '@inertiajs/react';
+import { ArrowLeft, CheckCircle2, File, ImagePlus, Upload, X } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
     index as projectIndex,
@@ -17,6 +17,11 @@ import ProjectSourceImageViewer from '@/components/project-source-image-viewer';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import {
+    isLargeFile,
+    isTooLarge,
+    startMultipartUpload,
+} from '@/lib/multipart-upload';
 
 type ProjectSummary = {
     id: number;
@@ -49,6 +54,28 @@ type SourceImageForm = {
     images: File[];
 };
 
+type LargeUploadState = {
+    isActive: boolean;
+    currentIndex: number;
+    totalFiles: number;
+    currentFileName: string;
+    percent: number;
+    bytesUploaded: number;
+    bytesTotal: number;
+    error: string | null;
+};
+
+const INITIAL_LARGE_STATE: LargeUploadState = {
+    isActive: false,
+    currentIndex: 0,
+    totalFiles: 0,
+    currentFileName: '',
+    percent: 0,
+    bytesUploaded: 0,
+    bytesTotal: 0,
+    error: null,
+};
+
 type Props = {
     project: ProjectSummary;
     sourceImages: SourceImageItem[];
@@ -66,63 +93,134 @@ export default function ProjectSourceImages({
     workflow,
     status,
 }: Props) {
+    const { largeFileUploadEnabled } = usePage<{ largeFileUploadEnabled: boolean }>().props;
+
     setLayoutProps({
         breadcrumbs: [
-            {
-                title: 'Проекты',
-                href: projectIndex(),
-            },
-            {
-                title: project.name,
-                href: showProject(project.id),
-            },
-            {
-                title: 'Исходники',
-                href: showProjectSourceImages(project.id),
-            },
+            { title: 'Проекты', href: projectIndex() },
+            { title: project.name, href: showProject(project.id) },
+            { title: 'Исходники', href: showProjectSourceImages(project.id) },
         ],
     });
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const [isDragging, setIsDragging] = useState(false);
-    const [activeImage, setActiveImage] = useState<SourceImageItem | null>(
-        null,
-    );
-    const [selectedPreviews, setSelectedPreviews] = useState<
-        SelectedImagePreview[]
-    >([]);
+    const [activeImage, setActiveImage] = useState<SourceImageItem | null>(null);
+    const [selectedPreviews, setSelectedPreviews] = useState<SelectedImagePreview[]>([]);
+    const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
+
     const completeStageForm = useForm<Record<string, never>>({});
     const { setData, post, processing, progress, errors, reset, clearErrors } =
-        useForm<SourceImageForm>({
-            images: [],
-        });
+        useForm<SourceImageForm>({ images: [] });
 
     useEffect(() => {
         return () => {
-            selectedPreviews.forEach((preview) => {
-                URL.revokeObjectURL(preview.url);
-            });
+            selectedPreviews.forEach((p) => URL.revokeObjectURL(p.url));
         };
     }, [selectedPreviews]);
 
-    const resetSelection = () => {
-        selectedPreviews.forEach((preview) => {
-            URL.revokeObjectURL(preview.url);
-        });
-
+    const resetSelection = useCallback(() => {
+        selectedPreviews.forEach((p) => URL.revokeObjectURL(p.url));
         setSelectedPreviews([]);
         reset();
         clearErrors();
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }, [selectedPreviews, reset, clearErrors]);
 
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+    // ── Large-file path ──────────────────────────────────────────────────────
+    const uploadLargeFiles = useCallback(
+        async (files: File[]) => {
+            const abort = new AbortController();
+            abortRef.current = abort;
+
+            setLargeState({
+                ...INITIAL_LARGE_STATE,
+                isActive: true,
+                totalFiles: files.length,
+                currentIndex: 0,
+                currentFileName: files[0]?.name ?? '',
+                bytesTotal: files.reduce((s, f) => s + f.size, 0),
+            });
+
+            let allOk = true;
+
+            for (let i = 0; i < files.length; i++) {
+                if (abort.signal.aborted) break;
+
+                const file = files[i];
+                setLargeState((prev) => ({
+                    ...prev,
+                    currentIndex: i,
+                    currentFileName: file.name,
+                    percent: 0,
+                    bytesUploaded: 0,
+                    bytesTotal: file.size,
+                    error: null,
+                }));
+
+                await startMultipartUpload({
+                    file,
+                    uploadType: 'source-image',
+                    projectId: project.id,
+                    signal: abort.signal,
+                    onProgress: (percent, bytesUploaded, bytesTotal) => {
+                        setLargeState((prev) => ({
+                            ...prev,
+                            percent,
+                            bytesUploaded,
+                            bytesTotal,
+                        }));
+                    },
+                    onSuccess: () => {
+                        // continue loop
+                    },
+                    onError: (message) => {
+                        allOk = false;
+                        setLargeState((prev) => ({ ...prev, error: message }));
+                    },
+                });
+
+                if (!allOk) break;
+            }
+
+            if (allOk && !abort.signal.aborted) {
+                setLargeState(INITIAL_LARGE_STATE);
+                router.reload({ only: ['sourceImages'] });
+            } else if (!abort.signal.aborted) {
+                // error already set in state
+                setLargeState((prev) => ({ ...prev, isActive: false }));
+            }
+
+            abortRef.current = null;
+        },
+        [project.id],
+    );
+
+    const cancelLargeUpload = () => {
+        abortRef.current?.abort();
+        setLargeState(INITIAL_LARGE_STATE);
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
+
+    // ── Regular (small) path ─────────────────────────────────────────────────
     const queueImages = (images: File[]) => {
         resetSelection();
         setIsDragging(false);
 
-        if (images.length === 0) {
+        if (images.length === 0) return;
+
+        // Validate size regardless of path
+        const tooLarge = images.filter(isTooLarge);
+        if (tooLarge.length > 0) {
+            // Let backend handle the error message; just reset
+            setSelectedPreviews([]);
+            return;
+        }
+
+        // Use multipart for large files if enabled
+        if (largeFileUploadEnabled && images.some(isLargeFile)) {
+            void uploadLargeFiles(images);
             return;
         }
 
@@ -143,9 +241,7 @@ export default function ProjectSourceImages({
         post(storeProjectSourceImages.url(project.id), {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => {
-                resetSelection();
-            },
+            onSuccess: () => resetSelection(),
         });
     };
 
@@ -153,19 +249,15 @@ export default function ProjectSourceImages({
         queueImages(Array.from(event.target.files ?? []));
     };
 
-    const openFilePicker = () => {
-        if (processing || completeStageForm.processing) {
-            return;
-        }
+    const isUploadingAny = processing || largeState.isActive;
 
+    const openFilePicker = () => {
+        if (isUploadingAny || completeStageForm.processing) return;
         fileInputRef.current?.click();
     };
 
     const handleDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key !== 'Enter' && event.key !== ' ') {
-            return;
-        }
-
+        if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         openFilePicker();
     };
@@ -193,7 +285,7 @@ export default function ProjectSourceImages({
                     <Button
                         type="button"
                         size="lg"
-                        disabled={processing || completeStageForm.processing}
+                        disabled={isUploadingAny || completeStageForm.processing}
                         className="bg-emerald-500 px-5 text-white hover:bg-emerald-600"
                         onClick={openFilePicker}
                     >
@@ -212,24 +304,15 @@ export default function ProjectSourceImages({
                 />
 
                 <section>
-                    <PhotographerProjectTabs
-                        projectId={project.id}
-                        activeTab="source-images"
-                    />
+                    <PhotographerProjectTabs projectId={project.id} activeTab="source-images" />
 
                     <div className="flex flex-col gap-4 border-b border-white/6 pb-5">
                         <div className="flex flex-wrap items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold text-white">
-                                    {project.name}
-                                </h1>
-                                <p className="mt-2 text-sm text-zinc-500">
-                                    {sourceImages.length} файлов внутри
-                                </p>
+                                <h1 className="text-3xl font-semibold text-white">{project.name}</h1>
+                                <p className="mt-2 text-sm text-zinc-500">{sourceImages.length} файлов внутри</p>
                                 {workflow.currentStageName && (
-                                    <p className="mt-1 text-sm text-zinc-500">
-                                        Этап: {workflow.currentStageName}
-                                    </p>
+                                    <p className="mt-1 text-sm text-zinc-500">Этап: {workflow.currentStageName}</p>
                                 )}
                             </div>
                         </div>
@@ -245,26 +328,21 @@ export default function ProjectSourceImages({
                         <div className="space-y-6">
                             <div className="flex flex-col items-center justify-center rounded-[1.75rem] border border-white/6 bg-slate-900/45 px-6 py-8 text-center backdrop-blur-sm">
                                 <p className="text-sm text-zinc-400">
-                                    Когда все исходники загружены, нажми кнопку
-                                    ниже
+                                    Когда все исходники загружены, нажми кнопку ниже
                                 </p>
                                 <Button
                                     type="button"
                                     size="lg"
                                     disabled={
                                         !workflow.canMarkReady ||
-                                        processing ||
+                                        isUploadingAny ||
                                         completeStageForm.processing
                                     }
                                     className="mt-4 min-w-56 rounded-full bg-emerald-500 px-8 text-white hover:bg-emerald-600 disabled:bg-white/5 disabled:text-zinc-500"
                                     onClick={() => {
                                         completeStageForm.post(
-                                            completeProjectSourceImages.url(
-                                                project.id,
-                                            ),
-                                            {
-                                                preserveScroll: true,
-                                            },
+                                            completeProjectSourceImages.url(project.id),
+                                            { preserveScroll: true },
                                         );
                                     }}
                                 >
@@ -281,30 +359,24 @@ export default function ProjectSourceImages({
 
                             <div
                                 role="button"
-                                tabIndex={processing ? -1 : 0}
+                                tabIndex={isUploadingAny ? -1 : 0}
                                 aria-label="Выбрать исходники"
                                 className={cn(
                                     'w-full rounded-[1.75rem] border border-dashed px-6 py-12 text-center transition focus-visible:ring-2 focus-visible:ring-emerald-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black focus-visible:outline-none',
                                     isDragging
                                         ? 'border-emerald-400 bg-emerald-500/12'
                                         : 'border-white/10 bg-slate-900/45 hover:border-emerald-500/35 hover:bg-emerald-500/8',
-                                    processing && 'cursor-wait opacity-80',
+                                    isUploadingAny && 'cursor-wait opacity-80',
                                 )}
                                 onClick={openFilePicker}
                                 onKeyDown={handleDropzoneKeyDown}
                                 onDragEnter={(event) => {
-                                    if (processing) {
-                                        return;
-                                    }
-
+                                    if (isUploadingAny) return;
                                     event.preventDefault();
                                     setIsDragging(true);
                                 }}
                                 onDragOver={(event) => {
-                                    if (processing) {
-                                        return;
-                                    }
-
+                                    if (isUploadingAny) return;
                                     event.preventDefault();
                                     setIsDragging(true);
                                 }}
@@ -313,18 +385,13 @@ export default function ProjectSourceImages({
                                     setIsDragging(false);
                                 }}
                                 onDrop={(event) => {
-                                    if (processing) {
-                                        return;
-                                    }
-
+                                    if (isUploadingAny) return;
                                     event.preventDefault();
-                                    queueImages(
-                                        Array.from(event.dataTransfer.files),
-                                    );
+                                    queueImages(Array.from(event.dataTransfer.files));
                                 }}
                             >
                                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-500/20 text-emerald-300">
-                                    {processing ? (
+                                    {isUploadingAny ? (
                                         <Upload className="h-6 w-6 animate-bounce" />
                                     ) : selectedPreviews.length > 0 ? (
                                         <CheckCircle2 className="h-6 w-6" />
@@ -334,23 +401,22 @@ export default function ProjectSourceImages({
                                 </div>
 
                                 <h2 className="mt-4 text-2xl font-semibold text-white">
-                                    {processing
+                                    {isUploadingAny
                                         ? 'Загрузка...'
                                         : 'Нажми сюда или перетащи файлы'}
                                 </h2>
                                 <p className="mt-1 text-sm leading-6 text-zinc-400">
-                                    {processing
+                                    {isUploadingAny
                                         ? 'Файлы уже загружаются'
-                                        : 'Можно выбрать сразу несколько файлов любого типа'}
+                                        : largeFileUploadEnabled
+                                          ? 'Можно выбрать сразу несколько файлов любого типа до 5 ГБ'
+                                          : 'Можно выбрать сразу несколько файлов любого типа'}
                                 </p>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     className="mt-5 border-white/10 bg-white/5 text-white hover:bg-white/10"
-                                    disabled={
-                                        processing ||
-                                        completeStageForm.processing
-                                    }
+                                    disabled={isUploadingAny || completeStageForm.processing}
                                     onClick={(event) => {
                                         event.stopPropagation();
                                         openFilePicker();
@@ -366,15 +432,13 @@ export default function ProjectSourceImages({
                             {imageErrors.length > 0 && (
                                 <div className="space-y-1">
                                     {imageErrors.map((message) => (
-                                        <InputError
-                                            key={message}
-                                            message={message}
-                                        />
+                                        <InputError key={message} message={message} />
                                     ))}
                                 </div>
                             )}
 
-                            {progress && (
+                            {/* Standard Inertia progress */}
+                            {progress && !largeState.isActive && (
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between text-sm text-emerald-300">
                                         <span>Загрузка</span>
@@ -383,11 +447,23 @@ export default function ProjectSourceImages({
                                     <div className="h-2 overflow-hidden rounded-full bg-white/10">
                                         <div
                                             className="h-full rounded-full bg-emerald-500 transition-all"
-                                            style={{
-                                                width: `${progress.percentage}%`,
-                                            }}
+                                            style={{ width: `${progress.percentage}%` }}
                                         />
                                     </div>
+                                </div>
+                            )}
+
+                            {/* Multipart upload progress */}
+                            {largeState.isActive && (
+                                <LargeUploadProgress
+                                    state={largeState}
+                                    onCancel={cancelLargeUpload}
+                                />
+                            )}
+
+                            {largeState.error && !largeState.isActive && (
+                                <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                                    {largeState.error}
                                 </div>
                             )}
 
@@ -408,9 +484,7 @@ export default function ProjectSourceImages({
                                                     {preview.name}
                                                 </p>
                                                 <p className="text-xs text-zinc-500">
-                                                    {formatBytes(
-                                                        preview.sizeBytes,
-                                                    )}
+                                                    {formatBytes(preview.sizeBytes)}
                                                 </p>
                                             </div>
                                         </div>
@@ -420,9 +494,7 @@ export default function ProjectSourceImages({
 
                             {sourceImages.length === 0 ? (
                                 <div className="rounded-[1.5rem] border border-dashed border-white/10 bg-slate-900/45 px-6 py-12 text-center">
-                                    <h2 className="text-lg font-medium text-white">
-                                        Пока пусто
-                                    </h2>
+                                    <h2 className="text-lg font-medium text-white">Пока пусто</h2>
                                     <p className="mt-2 text-sm leading-6 text-zinc-400">
                                         Добавьте первые файлы проекта
                                     </p>
@@ -437,23 +509,15 @@ export default function ProjectSourceImages({
                                             onClick={() => {
                                                 if (image.previewUrl) {
                                                     setActiveImage(image);
-
                                                     return;
                                                 }
-
-                                                window.open(
-                                                    image.url,
-                                                    '_blank',
-                                                    'noopener,noreferrer',
-                                                );
+                                                window.open(image.url, '_blank', 'noopener,noreferrer');
                                             }}
                                         >
                                             <div className="relative aspect-[4/3] overflow-hidden bg-black/30">
                                                 <PreviewThumb
                                                     name={image.name}
-                                                    previewUrl={
-                                                        image.previewUrl
-                                                    }
+                                                    previewUrl={image.previewUrl}
                                                     url={image.url}
                                                     mimeType={image.mimeType}
                                                     className="h-full w-full rounded-none object-cover transition duration-300 group-hover:scale-[1.03]"
@@ -465,9 +529,7 @@ export default function ProjectSourceImages({
                                                     {image.name}
                                                 </h3>
                                                 <p className="text-xs text-zinc-500">
-                                                    {formatBytes(
-                                                        image.sizeBytes,
-                                                    )}
+                                                    {formatBytes(image.sizeBytes)}
                                                 </p>
                                             </div>
                                         </button>
@@ -483,25 +545,69 @@ export default function ProjectSourceImages({
                 image={activeImage}
                 open={activeImage !== null}
                 onOpenChange={(open) => {
-                    if (!open) {
-                        setActiveImage(null);
-                    }
+                    if (!open) setActiveImage(null);
                 }}
             />
         </>
     );
 }
 
+// ── Large upload progress UI ─────────────────────────────────────────────────
+
+function LargeUploadProgress({
+    state,
+    onCancel,
+}: {
+    state: LargeUploadState;
+    onCancel: () => void;
+}) {
+    const fileLabel =
+        state.totalFiles > 1
+            ? `Файл ${state.currentIndex + 1} из ${state.totalFiles}: ${state.currentFileName}`
+            : state.currentFileName;
+
+    return (
+        <div className="space-y-2 rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-4">
+            <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate text-zinc-300">{fileLabel}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-emerald-300">{state.percent}%</span>
+                    <button
+                        type="button"
+                        aria-label="Отменить загрузку"
+                        className="text-zinc-500 transition hover:text-white"
+                        onClick={onCancel}
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${state.percent}%` }}
+                />
+            </div>
+            {state.bytesTotal > 0 && (
+                <p className="text-xs text-zinc-500">
+                    {formatBytes(state.bytesUploaded)} / {formatBytes(state.bytesTotal)}
+                </p>
+            )}
+            {state.error && (
+                <p className="text-xs text-rose-400">{state.error}</p>
+            )}
+        </div>
+    );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatBytes(sizeBytes: number): string {
-    if (sizeBytes < 1024) {
-        return `${sizeBytes} B`;
-    }
-
-    if (sizeBytes < 1024 * 1024) {
-        return `${(sizeBytes / 1024).toFixed(1)} KB`;
-    }
-
-    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (sizeBytes < 1024) return `${sizeBytes} B`;
+    if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
+    if (sizeBytes < 1024 * 1024 * 1024)
+        return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 const BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES = new Set([
@@ -527,36 +633,19 @@ const BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
 
 function getFileExtension(name: string): string {
     const lastDotIndex = name.lastIndexOf('.');
-
-    if (lastDotIndex === -1 || lastDotIndex === name.length - 1) {
-        return '';
-    }
-
+    if (lastDotIndex === -1 || lastDotIndex === name.length - 1) return '';
     return name.slice(lastDotIndex + 1).toLowerCase();
 }
 
 function getFileTypeLabel(name: string, mimeType?: string | null): string {
     const extension = getFileExtension(name);
-
-    if (extension !== '') {
-        return extension.toUpperCase();
-    }
-
-    if (!mimeType) {
-        return 'FILE';
-    }
-
+    if (extension !== '') return extension.toUpperCase();
+    if (!mimeType) return 'FILE';
     return mimeType.split('/')[0]?.toUpperCase() || 'FILE';
 }
 
-function canRenderImagePreview(
-    name: string,
-    mimeType: string | null | undefined,
-): boolean {
-    if (mimeType && BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES.has(mimeType)) {
-        return true;
-    }
-
+function canRenderImagePreview(name: string, mimeType: string | null | undefined): boolean {
+    if (mimeType && BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES.has(mimeType)) return true;
     return BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS.has(getFileExtension(name));
 }
 
@@ -618,10 +707,7 @@ function PhotographerProjectTabs({
                         </Link>
                     </TabsTrigger>
                     <TabsTrigger value="source-images" asChild>
-                        <Link
-                            href={showProjectSourceImages(projectId)}
-                            prefetch
-                        >
+                        <Link href={showProjectSourceImages(projectId)} prefetch>
                             Свои исходники
                         </Link>
                     </TabsTrigger>

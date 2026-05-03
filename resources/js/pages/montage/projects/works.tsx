@@ -1,4 +1,4 @@
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
+import { Head, Link, router, setLayoutProps, usePage, useForm } from '@inertiajs/react';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -7,9 +7,10 @@ import {
     ImagePlus,
     Upload,
     WandSparkles,
+    X,
 } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { index as montageProjectIndex } from '@/actions/App/Http/Controllers/MontageProjectController';
 import {
     complete as completeMontageWorks,
@@ -31,6 +32,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import {
+    isLargeFile,
+    isTooLarge,
+    startMultipartUpload,
+} from '@/lib/multipart-upload';
 
 type ProjectSummary = {
     id: number;
@@ -68,6 +74,28 @@ type ReplaceMontageAssetForm = {
     image: File | null;
 };
 
+type LargeUploadState = {
+    isActive: boolean;
+    currentIndex: number;
+    totalFiles: number;
+    currentFileName: string;
+    percent: number;
+    bytesUploaded: number;
+    bytesTotal: number;
+    error: string | null;
+};
+
+const INITIAL_LARGE_STATE: LargeUploadState = {
+    isActive: false,
+    currentIndex: 0,
+    totalFiles: 0,
+    currentFileName: '',
+    percent: 0,
+    bytesUploaded: 0,
+    bytesTotal: 0,
+    error: null,
+};
+
 type Props = {
     project: ProjectSummary;
     montageAssets: MontageAssetItem[];
@@ -101,6 +129,8 @@ export default function MontageProjectWorks({
     clientReview,
     status,
 }: Props) {
+    const { largeFileUploadEnabled } = usePage<{ largeFileUploadEnabled: boolean }>().props;
+
     const isDesignerWorkspace = workflow.assignedRole === 'designer';
     const workspaceTitle = isDesignerWorkspace ? 'Дизайн' : 'Монтаж';
     const completionLabel = isDesignerWorkspace
@@ -112,38 +142,26 @@ export default function MontageProjectWorks({
 
     setLayoutProps({
         breadcrumbs: [
-            {
-                title: workspaceTitle,
-                href: montageProjectIndex(),
-            },
-            {
-                title: project.name,
-                href: showMontageWorks(project.id),
-            },
+            { title: workspaceTitle, href: montageProjectIndex() },
+            { title: project.name, href: showMontageWorks(project.id) },
         ],
     });
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const replaceFileInputRef = useRef<HTMLInputElement | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [uploadTick, setUploadTick] = useState(0);
-    const [activeImage, setActiveImage] = useState<MontageAssetItem | null>(
-        null,
-    );
-    const [selectedPreviews, setSelectedPreviews] = useState<
-        SelectedImagePreview[]
-    >([]);
+    const [activeImage, setActiveImage] = useState<MontageAssetItem | null>(null);
+    const [selectedPreviews, setSelectedPreviews] = useState<SelectedImagePreview[]>([]);
+    const [largeState, setLargeState] = useState<LargeUploadState>(INITIAL_LARGE_STATE);
+
     const completeStageForm = useForm<Record<string, never>>({});
-    const replaceForm = useForm<ReplaceMontageAssetForm>({
-        image: null,
-    });
+    const replaceForm = useForm<ReplaceMontageAssetForm>({ image: null });
     const revisionCommentsByAssetId = useMemo(
         () =>
             new Map(
-                clientReview.requestedAssets.map((asset) => [
-                    asset.id,
-                    asset.comment,
-                ]),
+                clientReview.requestedAssets.map((asset) => [asset.id, asset.comment]),
             ),
         [clientReview.requestedAssets],
     );
@@ -156,54 +174,121 @@ export default function MontageProjectWorks({
         errors,
         reset,
         clearErrors,
-    } = useForm<MontageAssetForm>({
-        images: [],
-    });
+    } = useForm<MontageAssetForm>({ images: [] });
 
     const resetSelection = () => {
-        selectedPreviews.forEach((preview) => {
-            URL.revokeObjectURL(preview.url);
-        });
-
+        selectedPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
         setSelectedPreviews([]);
         reset();
         clearErrors();
-
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
+
     const handleUploadSuccess = useEffectEvent(() => {
         resetSelection();
     });
 
     useEffect(() => {
         return () => {
-            selectedPreviews.forEach((preview) => {
-                URL.revokeObjectURL(preview.url);
-            });
+            selectedPreviews.forEach((preview) => URL.revokeObjectURL(preview.url));
         };
     }, [selectedPreviews]);
 
     useEffect(() => {
-        if (uploadTick === 0 || data.images.length === 0) {
-            return;
-        }
+        if (uploadTick === 0 || data.images.length === 0) return;
 
         post(storeMontageWorks.url(project.id), {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => {
-                handleUploadSuccess();
-            },
+            onSuccess: () => handleUploadSuccess(),
         });
     }, [data.images.length, post, project.id, uploadTick]);
 
+    // ── Large-file path ──────────────────────────────────────────────────────
+    const uploadLargeFiles = useCallback(
+        async (files: File[]) => {
+            const abort = new AbortController();
+            abortRef.current = abort;
+
+            setLargeState({
+                ...INITIAL_LARGE_STATE,
+                isActive: true,
+                totalFiles: files.length,
+                currentIndex: 0,
+                currentFileName: files[0]?.name ?? '',
+                bytesTotal: files.reduce((s, f) => s + f.size, 0),
+            });
+
+            let allOk = true;
+
+            for (let i = 0; i < files.length; i++) {
+                if (abort.signal.aborted) break;
+
+                const file = files[i];
+                setLargeState((prev) => ({
+                    ...prev,
+                    currentIndex: i,
+                    currentFileName: file.name,
+                    percent: 0,
+                    bytesUploaded: 0,
+                    bytesTotal: file.size,
+                    error: null,
+                }));
+
+                await startMultipartUpload({
+                    file,
+                    uploadType: 'montage-asset',
+                    projectId: project.id,
+                    signal: abort.signal,
+                    onProgress: (percent, bytesUploaded, bytesTotal) => {
+                        setLargeState((prev) => ({
+                            ...prev,
+                            percent,
+                            bytesUploaded,
+                            bytesTotal,
+                        }));
+                    },
+                    onSuccess: () => {
+                        // continue loop
+                    },
+                    onError: (message) => {
+                        allOk = false;
+                        setLargeState((prev) => ({ ...prev, error: message }));
+                    },
+                });
+
+                if (!allOk) break;
+            }
+
+            if (allOk && !abort.signal.aborted) {
+                setLargeState(INITIAL_LARGE_STATE);
+                router.reload({ only: ['montageAssets'] });
+            } else if (!abort.signal.aborted) {
+                setLargeState((prev) => ({ ...prev, isActive: false }));
+            }
+
+            abortRef.current = null;
+        },
+        [project.id],
+    );
+
+    const cancelLargeUpload = () => {
+        abortRef.current?.abort();
+        setLargeState(INITIAL_LARGE_STATE);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // ── Queue handler ─────────────────────────────────────────────────────────
     const queueImages = (images: File[]) => {
         resetSelection();
         setIsDragging(false);
+        if (images.length === 0) return;
 
-        if (images.length === 0) {
+        const tooLarge = images.filter(isTooLarge);
+        if (tooLarge.length > 0) return;
+
+        if (largeFileUploadEnabled && images.some(isLargeFile)) {
+            void uploadLargeFiles(images);
             return;
         }
 
@@ -223,15 +308,14 @@ export default function MontageProjectWorks({
         queueImages(Array.from(event.target.files ?? []));
     };
 
+    const isUploadingAny = processing || largeState.isActive;
+
     const openFilePicker = () => {
         if (
-            processing ||
+            isUploadingAny ||
             completeStageForm.processing ||
             workflow.currentStageSlug !== 'montage'
-        ) {
-            return;
-        }
-
+        ) return;
         fileInputRef.current?.click();
     };
 
@@ -241,18 +325,12 @@ export default function MontageProjectWorks({
             !activeImage.requestedForRevision ||
             replaceForm.processing ||
             workflow.currentStageSlug !== 'montage'
-        ) {
-            return;
-        }
-
+        ) return;
         replaceFileInputRef.current?.click();
     };
 
     const handleDropzoneKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-        if (event.key !== 'Enter' && event.key !== ' ') {
-            return;
-        }
-
+        if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         openFilePicker();
     };
@@ -262,22 +340,13 @@ export default function MontageProjectWorks({
         .filter(([key]) => key.startsWith('images.'))
         .map(([, value]) => value);
     const activeImageComment =
-        activeImage === null
-            ? null
-            : (revisionCommentsByAssetId.get(activeImage.id) ?? null);
+        activeImage === null ? null : (revisionCommentsByAssetId.get(activeImage.id) ?? null);
 
-    const handleReplaceFileSelection = (
-        event: ChangeEvent<HTMLInputElement>,
-    ) => {
+    const handleReplaceFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0] ?? null;
+        if (file === null || activeImage === null) return;
 
-        if (file === null || activeImage === null) {
-            return;
-        }
-
-        replaceForm.transform(() => ({
-            image: file,
-        }));
+        replaceForm.transform(() => ({ image: file }));
 
         replaceForm.post(replaceMontageWork.url([project.id, activeImage.id]), {
             forceFormData: true,
@@ -286,10 +355,7 @@ export default function MontageProjectWorks({
                 replaceForm.reset();
                 replaceForm.clearErrors();
                 replaceForm.transform((data) => data);
-
-                if (replaceFileInputRef.current) {
-                    replaceFileInputRef.current.value = '';
-                }
+                if (replaceFileInputRef.current) replaceFileInputRef.current.value = '';
             },
             onError: () => {
                 replaceForm.transform((data) => data);
@@ -334,11 +400,7 @@ export default function MontageProjectWorks({
                                 variant="outline"
                                 className="border-white/10 bg-transparent text-white hover:bg-white/5"
                             >
-                                <a
-                                    href={downloadMontageArchive.url(
-                                        project.id,
-                                    )}
-                                >
+                                <a href={downloadMontageArchive.url(project.id)}>
                                     <Download className="mr-2 h-4 w-4" />
                                     Скачать архив
                                 </a>
@@ -349,7 +411,7 @@ export default function MontageProjectWorks({
                             type="button"
                             size="lg"
                             disabled={
-                                processing ||
+                                isUploadingAny ||
                                 completeStageForm.processing ||
                                 workflow.currentStageSlug !== 'montage'
                             }
@@ -357,9 +419,7 @@ export default function MontageProjectWorks({
                             onClick={openFilePicker}
                         >
                             <ImagePlus className="mr-2 h-4 w-4" />
-                            {isDesignerWorkspace
-                                ? 'Добавить дизайны'
-                                : 'Добавить готовые работы'}
+                            {isDesignerWorkspace ? 'Добавить дизайны' : 'Добавить готовые работы'}
                         </Button>
                     </div>
                 </div>
@@ -407,19 +467,15 @@ export default function MontageProjectWorks({
 
                         <div className="flex flex-wrap items-end justify-between gap-4">
                             <div>
-                                <h1 className="text-3xl font-semibold text-white">
-                                    {project.name}
-                                </h1>
+                                <h1 className="text-3xl font-semibold text-white">{project.name}</h1>
                                 <p className="mt-2 text-sm text-zinc-500">
-                                    Фотограф:{' '}
-                                    {project.photographerName ?? 'Не указан'}
+                                    Фотограф: {project.photographerName ?? 'Не указан'}
                                 </p>
                                 <p className="mt-1 text-sm text-zinc-500">
                                     Этап:{' '}
                                     {isDesignerWorkspace
                                         ? 'Дизайн виньеток'
-                                        : (workflow.currentStageName ??
-                                          'Неизвестно')}
+                                        : (workflow.currentStageName ?? 'Неизвестно')}
                                 </p>
                             </div>
 
@@ -433,19 +489,15 @@ export default function MontageProjectWorks({
                                     className="bg-emerald-500 text-white hover:bg-emerald-600"
                                     onClick={() => {
                                         completeStageForm.post(
-                                            completeMontageWorks.url(
-                                                project.id,
-                                            ),
-                                            {
-                                                preserveScroll: true,
-                                            },
+                                            completeMontageWorks.url(project.id),
+                                            { preserveScroll: true },
                                         );
                                     }}
-                                    >
-                                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                                        {completionLabel}
-                                    </Button>
-                                )}
+                                >
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    {completionLabel}
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -470,10 +522,7 @@ export default function MontageProjectWorks({
                     {imageErrors.length > 0 && (
                         <div className="mt-4 space-y-2">
                             {imageErrors.map((message, index) => (
-                                <InputError
-                                    key={`${message}-${index}`}
-                                    message={message}
-                                />
+                                <InputError key={`${message}-${index}`} message={message} />
                             ))}
                         </div>
                     )}
@@ -498,9 +547,7 @@ export default function MontageProjectWorks({
                             onDragLeave={() => setIsDragging(false)}
                             onDrop={(event) => {
                                 event.preventDefault();
-                                queueImages(
-                                    Array.from(event.dataTransfer.files),
-                                );
+                                queueImages(Array.from(event.dataTransfer.files));
                             }}
                         >
                             <div className="rounded-full bg-emerald-500/10 p-3 text-emerald-300">
@@ -512,14 +559,16 @@ export default function MontageProjectWorks({
                                     : 'Перетащите готовые работы сюда'}
                             </p>
                             <p className="mt-2 max-w-xs text-sm text-zinc-500">
-                                Поддерживаются JPG, PNG, WEBP, SVG и RAW-форматы (RAF, CR2, CR3, DNG, NEF и другие) до 50 МБ за файл.
+                                {largeFileUploadEnabled
+                                    ? 'JPG, PNG, WEBP, SVG и RAW-форматы до 5 ГБ за файл'
+                                    : 'Поддерживаются JPG, PNG, WEBP, SVG и RAW-форматы (RAF, CR2, CR3, DNG, NEF и другие) до 50 МБ за файл.'}
                             </p>
                             <Button
                                 type="button"
                                 variant="outline"
                                 className="mt-5 border-white/10 bg-white/5 text-white hover:bg-white/10"
                                 disabled={
-                                    processing ||
+                                    isUploadingAny ||
                                     completeStageForm.processing ||
                                     workflow.currentStageSlug !== 'montage'
                                 }
@@ -583,9 +632,23 @@ export default function MontageProjectWorks({
                         )}
                     </div>
 
-                    {progress && (
+                    {/* Standard Inertia progress */}
+                    {progress && !largeState.isActive && (
                         <div className="mt-4 rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-3 text-sm text-zinc-300">
                             Загрузка: {progress.percentage}%
+                        </div>
+                    )}
+
+                    {/* Multipart upload progress */}
+                    {largeState.isActive && (
+                        <div className="mt-4">
+                            <LargeUploadProgress state={largeState} onCancel={cancelLargeUpload} />
+                        </div>
+                    )}
+
+                    {largeState.error && !largeState.isActive && (
+                        <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                            {largeState.error}
                         </div>
                     )}
 
@@ -616,17 +679,13 @@ export default function MontageProjectWorks({
                 <DialogContent className="max-w-4xl border-white/10 bg-slate-950 text-white">
                     <DialogTitle>{activeImage?.name ?? 'Превью'}</DialogTitle>
                     <DialogDescription className="text-zinc-400">
-                        Просмотр загруженного файла и замечаний клиента по
-                        этому результату.
+                        Просмотр загруженного файла и замечаний клиента по этому результату.
                     </DialogDescription>
 
                     {activeImage && (
                         <div className="space-y-4">
                             {activeImage.previewUrl ||
-                            canRenderImagePreview(
-                                activeImage.name,
-                                activeImage.mimeType,
-                            ) ? (
+                            canRenderImagePreview(activeImage.name, activeImage.mimeType) ? (
                                 <img
                                     src={activeImage.previewUrl ?? activeImage.url}
                                     alt={activeImage.name}
@@ -639,10 +698,7 @@ export default function MontageProjectWorks({
                                         Для этого формата превью недоступно.
                                     </p>
                                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase text-zinc-300">
-                                        {getFileTypeLabel(
-                                            activeImage.name,
-                                            activeImage.mimeType,
-                                        )}
+                                        {getFileTypeLabel(activeImage.name, activeImage.mimeType)}
                                     </span>
                                 </div>
                             )}
@@ -662,8 +718,7 @@ export default function MontageProjectWorks({
                                             'Клиент отметил эту работу для правки без отдельного комментария.'}
                                     </p>
 
-                                    {workflow.currentStageSlug ===
-                                        'montage' && (
+                                    {workflow.currentStageSlug === 'montage' && (
                                         <Button
                                             type="button"
                                             disabled={replaceForm.processing}
@@ -686,12 +741,7 @@ export default function MontageProjectWorks({
                                     variant="outline"
                                     className="border-white/10 bg-transparent text-white hover:bg-white/5"
                                 >
-                                    <a
-                                        href={downloadMontageWork.url([
-                                            project.id,
-                                            activeImage.id,
-                                        ])}
-                                    >
+                                    <a href={downloadMontageWork.url([project.id, activeImage.id])}>
                                         <Download className="mr-2 h-4 w-4" />
                                         Скачать файл
                                     </a>
@@ -705,11 +755,59 @@ export default function MontageProjectWorks({
     );
 }
 
-function formatBytes(sizeBytes: number): string {
-    if (sizeBytes >= 1024 * 1024) {
-        return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`;
-    }
+// ── Large upload progress UI ─────────────────────────────────────────────────
 
+function LargeUploadProgress({
+    state,
+    onCancel,
+}: {
+    state: LargeUploadState;
+    onCancel: () => void;
+}) {
+    const fileLabel =
+        state.totalFiles > 1
+            ? `Файл ${state.currentIndex + 1} из ${state.totalFiles}: ${state.currentFileName}`
+            : state.currentFileName;
+
+    return (
+        <div className="space-y-2 rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-4">
+            <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate text-zinc-300">{fileLabel}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-emerald-300">{state.percent}%</span>
+                    <button
+                        type="button"
+                        aria-label="Отменить загрузку"
+                        className="text-zinc-500 transition hover:text-white"
+                        onClick={onCancel}
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${state.percent}%` }}
+                />
+            </div>
+            {state.bytesTotal > 0 && (
+                <p className="text-xs text-zinc-500">
+                    {formatBytes(state.bytesUploaded)} / {formatBytes(state.bytesTotal)}
+                </p>
+            )}
+            {state.error && <p className="text-xs text-rose-400">{state.error}</p>}
+        </div>
+    );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatBytes(sizeBytes: number): string {
+    if (sizeBytes >= 1024 * 1024 * 1024)
+        return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`;
+    if (sizeBytes >= 1024 * 1024)
+        return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`;
     return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`;
 }
 
@@ -736,32 +834,18 @@ const BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
 
 function getFileExtension(name: string): string {
     const lastDotIndex = name.lastIndexOf('.');
-
-    if (lastDotIndex === -1 || lastDotIndex === name.length - 1) {
-        return '';
-    }
-
+    if (lastDotIndex === -1 || lastDotIndex === name.length - 1) return '';
     return name.slice(lastDotIndex + 1).toLowerCase();
 }
 
 function canRenderImagePreview(name: string, mimeType: string | null): boolean {
-    if (mimeType && BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES.has(mimeType)) {
-        return true;
-    }
-
+    if (mimeType && BROWSER_PREVIEWABLE_IMAGE_MIME_TYPES.has(mimeType)) return true;
     return BROWSER_PREVIEWABLE_IMAGE_EXTENSIONS.has(getFileExtension(name));
 }
 
 function getFileTypeLabel(name: string, mimeType: string | null): string {
     const extension = getFileExtension(name);
-
-    if (extension !== '') {
-        return extension;
-    }
-
-    if (mimeType) {
-        return mimeType.split('/')[1] ?? 'file';
-    }
-
+    if (extension !== '') return extension;
+    if (mimeType) return mimeType.split('/')[1] ?? 'file';
     return 'file';
 }
