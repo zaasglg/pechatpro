@@ -24,7 +24,7 @@ class StoreProjectSourceImagesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'images' => ['required', 'array', 'min:1', 'max:30'],
+            'images' => ['required', 'array', 'min:1'],
             'images.*' => [
                 'required',
                 File::default()->max('50mb'),
