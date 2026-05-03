@@ -1,4 +1,11 @@
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
+import {
+    Head,
+    Link,
+    router,
+    setLayoutProps,
+    useForm,
+    usePage,
+} from '@inertiajs/react';
 import {
     ArrowLeft,
     CheckCircle2,
@@ -13,6 +20,7 @@ import {
     Palette,
     Trash2,
     Upload,
+    X,
 } from 'lucide-react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import {
@@ -48,6 +56,11 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useClipboard } from '@/hooks/use-clipboard';
+import {
+    LARGE_FILE_THRESHOLD_BYTES,
+    isTooLarge,
+    startMultipartUpload,
+} from '@/lib/multipart-upload';
 import { cn } from '@/lib/utils';
 
 type ProjectDetails = {
@@ -105,6 +118,28 @@ type SourceImageForm = {
     images: File[];
 };
 
+type LargeUploadState = {
+    isActive: boolean;
+    currentIndex: number;
+    totalFiles: number;
+    currentFileName: string;
+    percent: number;
+    bytesUploaded: number;
+    bytesTotal: number;
+    error: string | null;
+};
+
+const INITIAL_LARGE_STATE: LargeUploadState = {
+    isActive: false,
+    currentIndex: 0,
+    totalFiles: 0,
+    currentFileName: '',
+    percent: 0,
+    bytesUploaded: 0,
+    bytesTotal: 0,
+    error: null,
+};
+
 type Props = {
     project: ProjectDetails;
     stages: ProjectStage[];
@@ -130,6 +165,9 @@ export default function ProjectShow({
     initialTab,
     status,
 }: Props) {
+    const { largeFileUploadEnabled } = usePage<{
+        largeFileUploadEnabled: boolean;
+    }>().props;
     const [copiedText, copy] = useClipboard();
     const deleteForm = useForm<Record<string, never>>({});
     const deleteSourceImageForm = useForm<Record<string, never>>({});
@@ -137,6 +175,7 @@ export default function ProjectShow({
         'details' | 'source-images' | 'designer-works'
     >(initialTab);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const abortRef = useRef<AbortController | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [activeImage, setActiveImage] = useState<SourceImageItem | null>(
         null,
@@ -146,6 +185,8 @@ export default function ProjectShow({
     const [selectedPreviews, setSelectedPreviews] = useState<
         SelectedImagePreview[]
     >([]);
+    const [largeState, setLargeState] =
+        useState<LargeUploadState>(INITIAL_LARGE_STATE);
     const deferredSelectedPreviews = useDeferredValue(selectedPreviews);
     const completeStageForm = useForm<Record<string, never>>({});
     const { setData, post, processing, progress, errors, reset, clearErrors } =
@@ -176,11 +217,120 @@ export default function ProjectShow({
         }
     };
 
+    const uploadLargeFiles = async (files: File[]) => {
+        const abort = new AbortController();
+        abortRef.current = abort;
+
+        const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+
+        setLargeState({
+            ...INITIAL_LARGE_STATE,
+            isActive: true,
+            totalFiles: files.length,
+            currentIndex: 0,
+            currentFileName: files[0]?.name ?? '',
+            bytesTotal: totalBytes,
+        });
+
+        let allOk = true;
+        let completedBytes = 0;
+
+        for (let index = 0; index < files.length; index += 1) {
+            if (abort.signal.aborted) {
+                break;
+            }
+
+            const file = files[index];
+            const fileStartBytes = completedBytes;
+
+            setLargeState((previous) => ({
+                ...previous,
+                currentIndex: index,
+                currentFileName: file.name,
+                error: null,
+            }));
+
+            await startMultipartUpload({
+                file,
+                uploadType: 'source-image',
+                projectId: project.id,
+                signal: abort.signal,
+                onProgress: (_percent, fileBytesUploaded) => {
+                    const totalUploaded = fileStartBytes + fileBytesUploaded;
+
+                    setLargeState((previous) => ({
+                        ...previous,
+                        bytesUploaded: totalUploaded,
+                        percent: Math.round((totalUploaded / totalBytes) * 100),
+                    }));
+                },
+                onSuccess: () => {
+                    completedBytes += file.size;
+                },
+                onError: (message) => {
+                    allOk = false;
+                    setLargeState((previous) => ({
+                        ...previous,
+                        error: message,
+                    }));
+                },
+            });
+
+            if (!allOk) {
+                break;
+            }
+        }
+
+        if (allOk && !abort.signal.aborted) {
+            setLargeState(INITIAL_LARGE_STATE);
+            setActiveTab('source-images');
+            router.reload({ only: ['sourceImages'] });
+        } else if (!abort.signal.aborted) {
+            setLargeState((previous) => ({ ...previous, isActive: false }));
+        }
+
+        abortRef.current = null;
+    };
+
+    const cancelLargeUpload = () => {
+        abortRef.current?.abort();
+        setLargeState(INITIAL_LARGE_STATE);
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
     const queueImages = (images: File[]) => {
         resetSelection();
         setIsDragging(false);
 
         if (images.length === 0) {
+            return;
+        }
+
+        const tooLarge = images.filter(isTooLarge);
+
+        if (tooLarge.length > 0) {
+            setLargeState({
+                ...INITIAL_LARGE_STATE,
+                error: 'Один или несколько файлов превышают 5 ГБ. Выберите файлы меньшего размера.',
+            });
+            return;
+        }
+
+        if (largeFileUploadEnabled) {
+            void uploadLargeFiles(images);
+            return;
+        }
+
+        const totalSize = images.reduce((sum, file) => sum + file.size, 0);
+
+        if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
+            setLargeState({
+                ...INITIAL_LARGE_STATE,
+                error: 'Суммарный размер выбранных файлов превышает 50 МБ. Выберите меньше файлов за раз.',
+            });
             return;
         }
 
@@ -214,7 +364,7 @@ export default function ProjectShow({
     };
 
     const openFilePicker = () => {
-        if (processing || completeStageForm.processing) {
+        if (isUploadingAny || completeStageForm.processing) {
             return;
         }
 
@@ -234,6 +384,7 @@ export default function ProjectShow({
     const imageErrors = Object.entries(errors)
         .filter(([key]) => key.startsWith('images.'))
         .map(([, value]) => value);
+    const isUploadingAny = processing || largeState.isActive;
 
     const handleDeleteSourceImage = () => {
         if (imagePendingDeletion === null) {
@@ -522,7 +673,7 @@ export default function ProjectShow({
                                             type="button"
                                             size="lg"
                                             disabled={
-                                                processing ||
+                                                isUploadingAny ||
                                                 completeStageForm.processing
                                             }
                                             className="w-full bg-emerald-500 px-5 text-white hover:bg-emerald-600 sm:w-auto"
@@ -536,7 +687,7 @@ export default function ProjectShow({
                                             size="lg"
                                             disabled={
                                                 !workflow.canMarkReady ||
-                                                processing ||
+                                                isUploadingAny ||
                                                 completeStageForm.processing
                                             }
                                             variant="outline"
@@ -575,19 +726,20 @@ export default function ProjectShow({
                             <div className="mt-6 space-y-6">
                                 <div
                                     role="button"
-                                    tabIndex={processing ? -1 : 0}
+                                    tabIndex={isUploadingAny ? -1 : 0}
                                     aria-label="Выбрать исходники"
                                     className={cn(
                                         'w-full rounded-[1.75rem] border border-dashed px-6 py-12 text-center transition focus-visible:ring-2 focus-visible:ring-emerald-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black focus-visible:outline-none',
                                         isDragging
                                             ? 'border-emerald-400 bg-emerald-500/12'
                                             : 'border-white/10 bg-slate-900/45 hover:border-emerald-500/35 hover:bg-emerald-500/8',
-                                        processing && 'cursor-wait opacity-80',
+                                        isUploadingAny &&
+                                            'cursor-wait opacity-80',
                                     )}
                                     onClick={openFilePicker}
                                     onKeyDown={handleDropzoneKeyDown}
                                     onDragEnter={(event) => {
-                                        if (processing) {
+                                        if (isUploadingAny) {
                                             return;
                                         }
 
@@ -595,7 +747,7 @@ export default function ProjectShow({
                                         setIsDragging(true);
                                     }}
                                     onDragOver={(event) => {
-                                        if (processing) {
+                                        if (isUploadingAny) {
                                             return;
                                         }
 
@@ -607,20 +759,20 @@ export default function ProjectShow({
                                         setIsDragging(false);
                                     }}
                                     onDrop={(event) => {
-                                        if (processing) {
+                                        if (isUploadingAny) {
                                             return;
                                         }
 
                                         event.preventDefault();
                                         queueImages(
                                             Array.from(
-                                                event.dataTransfer.files,
+                                                event.dataTransfer.files ?? [],
                                             ),
                                         );
                                     }}
                                 >
                                     <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-500/20 text-emerald-300">
-                                        {processing ? (
+                                        {isUploadingAny ? (
                                             <Upload className="h-6 w-6 animate-bounce" />
                                         ) : selectedPreviews.length > 0 ? (
                                             <CheckCircle2 className="h-6 w-6" />
@@ -630,21 +782,23 @@ export default function ProjectShow({
                                     </div>
 
                                     <h2 className="mt-4 text-2xl font-semibold text-white">
-                                        {processing
+                                        {isUploadingAny
                                             ? 'Загрузка...'
                                             : 'Нажми сюда или перетащи файлы'}
                                     </h2>
                                     <p className="mt-1 text-sm leading-6 text-zinc-400">
-                                        {processing
+                                        {isUploadingAny
                                             ? 'Файлы уже загружаются'
-                                            : 'Можно выбрать сразу несколько файлов любого типа'}
+                                            : largeFileUploadEnabled
+                                              ? 'Можно выбрать сразу несколько файлов любого типа до 5 ГБ'
+                                              : 'Можно выбрать сразу несколько файлов любого типа'}
                                     </p>
                                     <Button
                                         type="button"
                                         variant="outline"
                                         className="mt-5 border-white/10 bg-white/5 text-white hover:bg-white/10"
                                         disabled={
-                                            processing ||
+                                            isUploadingAny ||
                                             completeStageForm.processing
                                         }
                                         onClick={(event) => {
@@ -670,7 +824,7 @@ export default function ProjectShow({
                                     </div>
                                 )}
 
-                                {progress && (
+                                {progress && !largeState.isActive && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between text-sm text-emerald-300">
                                             <span>Загрузка</span>
@@ -684,6 +838,19 @@ export default function ProjectShow({
                                                 }}
                                             />
                                         </div>
+                                    </div>
+                                )}
+
+                                {largeState.isActive && (
+                                    <LargeUploadProgress
+                                        state={largeState}
+                                        onCancel={cancelLargeUpload}
+                                    />
+                                )}
+
+                                {largeState.error && !largeState.isActive && (
+                                    <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                                        {largeState.error}
                                     </div>
                                 )}
 
@@ -970,6 +1137,53 @@ export default function ProjectShow({
     );
 }
 
+function LargeUploadProgress({
+    state,
+    onCancel,
+}: {
+    state: LargeUploadState;
+    onCancel: () => void;
+}) {
+    const fileLabel =
+        state.totalFiles > 1
+            ? `Файл ${state.currentIndex + 1} из ${state.totalFiles}: ${state.currentFileName}`
+            : state.currentFileName;
+
+    return (
+        <div className="space-y-2 rounded-2xl border border-white/6 bg-slate-900/45 px-4 py-4">
+            <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate text-zinc-300">{fileLabel}</span>
+                <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-emerald-300">{state.percent}%</span>
+                    <button
+                        type="button"
+                        aria-label="Отменить загрузку"
+                        className="text-zinc-500 transition hover:text-white"
+                        onClick={onCancel}
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${state.percent}%` }}
+                />
+            </div>
+            {state.bytesTotal > 0 && (
+                <p className="text-xs text-zinc-500">
+                    {formatBytes(state.bytesUploaded)} /{' '}
+                    {formatBytes(state.bytesTotal)}
+                </p>
+            )}
+            {state.error && (
+                <p className="text-xs text-rose-400">{state.error}</p>
+            )}
+        </div>
+    );
+}
+
 function SpecRow({ label, value }: { label: string; value: string }) {
     return (
         <div className="rounded-[1.25rem] border border-white/6 bg-slate-900/45 p-4 backdrop-blur-sm">
@@ -1077,7 +1291,11 @@ function formatBytes(sizeBytes: number): string {
         return `${(sizeBytes / 1024).toFixed(1)} KB`;
     }
 
-    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (sizeBytes < 1024 * 1024 * 1024) {
+        return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    return `${(sizeBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function formatStageStatus(status: string): string {

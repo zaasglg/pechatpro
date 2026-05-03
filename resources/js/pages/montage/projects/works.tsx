@@ -195,6 +195,8 @@ export default function MontageProjectWorks({
     }, [selectedPreviews]);
 
     useEffect(() => {
+        // Hard guard: never send Inertia POST when multipart is enabled
+        if (largeFileUploadEnabled) return;
         if (uploadTick === 0 || data.images.length === 0) return;
 
         post(storeMontageWorks.url(project.id), {
@@ -202,7 +204,7 @@ export default function MontageProjectWorks({
             preserveScroll: true,
             onSuccess: () => handleUploadSuccess(),
         });
-    }, [data.images.length, post, project.id, uploadTick]);
+    }, [largeFileUploadEnabled, data.images.length, post, project.id, uploadTick]);
 
     // ── Large-file path ──────────────────────────────────────────────────────
     const uploadLargeFiles = useCallback(
@@ -281,41 +283,44 @@ export default function MontageProjectWorks({
     };
 
     // ── Queue handler ─────────────────────────────────────────────────────────
-    const queueImages = (images: File[]) => {
-        resetSelection();
-        setIsDragging(false);
-        if (images.length === 0) return;
+    const queueImages = useCallback(
+        (images: File[]) => {
+            resetSelection();
+            setIsDragging(false);
+            if (images.length === 0) return;
 
-        const tooLarge = images.filter(isTooLarge);
-        if (tooLarge.length > 0) return;
+            const tooLarge = images.filter(isTooLarge);
+            if (tooLarge.length > 0) return;
 
-        // Always use multipart when enabled — avoids sending large batches via Inertia
-        if (largeFileUploadEnabled) {
-            void uploadLargeFiles(images);
-            return;
-        }
+            // Hard guard: always use multipart when enabled
+            if (largeFileUploadEnabled) {
+                void uploadLargeFiles(images);
+                return;
+            }
 
-        // Multipart disabled: guard against batches that would exceed nginx/PHP limits
-        const totalSize = images.reduce((sum, file) => sum + file.size, 0);
-        if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
-            setLargeState({
-                ...INITIAL_LARGE_STATE,
-                error: `Суммарный размер выбранных файлов (${Math.round(totalSize / 1024 / 1024)} МБ) превышает 50 МБ. Выберите меньше файлов за раз.`,
-            });
-            return;
-        }
+            // Multipart disabled: guard against batches that would exceed nginx/PHP limits
+            const totalSize = images.reduce((sum, file) => sum + file.size, 0);
+            if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
+                setLargeState({
+                    ...INITIAL_LARGE_STATE,
+                    error: `Суммарный размер выбранных файлов (${Math.round(totalSize / 1024 / 1024)} МБ) превышает 50 МБ. Выберите меньше файлов за раз.`,
+                });
+                return;
+            }
 
-        setData('images', images);
-        setSelectedPreviews(
-            images.map((image) => ({
-                id: `${image.name}-${image.size}-${image.lastModified}`,
-                name: image.name,
-                sizeBytes: image.size,
-                url: URL.createObjectURL(image),
-            })),
-        );
-        setUploadTick((value) => value + 1);
-    };
+            setData('images', images);
+            setSelectedPreviews(
+                images.map((image) => ({
+                    id: `${image.name}-${image.size}-${image.lastModified}`,
+                    name: image.name,
+                    sizeBytes: image.size,
+                    url: URL.createObjectURL(image),
+                })),
+            );
+            setUploadTick((value) => value + 1);
+        },
+        [largeFileUploadEnabled, uploadLargeFiles, resetSelection, setData],
+    );
 
     const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
         queueImages(Array.from(event.target.files ?? []));

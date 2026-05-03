@@ -205,54 +205,57 @@ export default function ProjectSourceImages({
     };
 
     // ── Regular (small) path ─────────────────────────────────────────────────
-    const queueImages = (images: File[]) => {
-        resetSelection();
-        setIsDragging(false);
+    const queueImages = useCallback(
+        (images: File[]) => {
+            resetSelection();
+            setIsDragging(false);
 
-        if (images.length === 0) return;
+            if (images.length === 0) return;
 
-        const tooLarge = images.filter(isTooLarge);
-        if (tooLarge.length > 0) {
-            setSelectedPreviews([]);
-            return;
-        }
+            const tooLarge = images.filter(isTooLarge);
+            if (tooLarge.length > 0) {
+                setSelectedPreviews([]);
+                return;
+            }
 
-        // Always use multipart when enabled — avoids sending large batches via Inertia
-        if (largeFileUploadEnabled) {
-            void uploadLargeFiles(images);
-            return;
-        }
+            // Hard guard: always use multipart when enabled
+            if (largeFileUploadEnabled) {
+                void uploadLargeFiles(images);
+                return;
+            }
 
-        // Multipart disabled: guard against batches that would exceed nginx/PHP limits
-        const totalSize = images.reduce((sum, file) => sum + file.size, 0);
-        if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
-            setLargeState({
-                ...INITIAL_LARGE_STATE,
-                error: `Суммарный размер выбранных файлов (${Math.round(totalSize / 1024 / 1024)} МБ) превышает 50 МБ. Выберите меньше файлов за раз.`,
+            // Multipart disabled: guard against batches that would exceed nginx/PHP limits
+            const totalSize = images.reduce((sum, file) => sum + file.size, 0);
+            if (totalSize > LARGE_FILE_THRESHOLD_BYTES) {
+                setLargeState({
+                    ...INITIAL_LARGE_STATE,
+                    error: `Суммарный размер выбранных файлов (${Math.round(totalSize / 1024 / 1024)} МБ) превышает 50 МБ. Выберите меньше файлов за раз.`,
+                });
+                return;
+            }
+
+            setSelectedPreviews(
+                images.map((image) => ({
+                    id: `${image.name}-${image.size}-${image.lastModified}`,
+                    name: image.name,
+                    sizeBytes: image.size,
+                    url: URL.createObjectURL(image),
+                    mimeType: image.type,
+                })),
+            );
+
+            flushSync(() => {
+                setData('images', images);
             });
-            return;
-        }
 
-        setSelectedPreviews(
-            images.map((image) => ({
-                id: `${image.name}-${image.size}-${image.lastModified}`,
-                name: image.name,
-                sizeBytes: image.size,
-                url: URL.createObjectURL(image),
-                mimeType: image.type,
-            })),
-        );
-
-        flushSync(() => {
-            setData('images', images);
-        });
-
-        post(storeProjectSourceImages.url(project.id), {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => resetSelection(),
-        });
-    };
+            post(storeProjectSourceImages.url(project.id), {
+                forceFormData: true,
+                preserveScroll: true,
+                onSuccess: () => resetSelection(),
+            });
+        },
+        [largeFileUploadEnabled, uploadLargeFiles, resetSelection, setData, post, project.id],
+    );
 
     const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
         queueImages(Array.from(event.target.files ?? []));
