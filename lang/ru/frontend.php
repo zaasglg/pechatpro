@@ -18,6 +18,7 @@ return [
             'dashboard_button' => 'Перейти в панель',
             'primary_button' => 'Начать работу',
             'secondary_button' => 'Узнать больше',
+            'price_button' => 'Узнать цену',
             'illustration_alt' => 'Иллюстрация сервиса PechatPRO',
         ],
         'features' => [

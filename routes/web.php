@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MontageProjectController;
 use App\Http\Controllers\PhotographerProjectController;
+use App\Http\Controllers\PriceCalculatorController;
 use App\Http\Controllers\PrintProjectController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectClientSelectionController;
@@ -27,6 +28,8 @@ Route::inertia('/', 'welcome', [
 ])->name('home');
 
 Route::post('locale', LocaleController::class)->name('locale.update');
+
+Route::get('/price-calculator', PriceCalculatorController::class)->name('price-calculator');
 
 Route::get('/test-s3', function () {
     try {

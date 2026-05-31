@@ -18,6 +18,7 @@ return [
             'dashboard_button' => 'Панельге өту',
             'primary_button' => 'Жұмысты бастау',
             'secondary_button' => 'Толығырақ білу',
+            'price_button' => 'Бағасын білу',
             'illustration_alt' => 'PechatPRO сервисінің иллюстрациясы',
         ],
         'features' => [

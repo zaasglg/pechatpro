@@ -95,8 +95,8 @@ export default function Welcome({
 
             <div className="dark relative min-h-screen overflow-hidden bg-[#111827] font-sans text-white selection:bg-emerald-500/25">
                 {/* Фоновые градиенты */}
-                <div className="pointer-events-none absolute -top-[10%] -left-[10%] h-[70rem] w-[70rem] rounded-full bg-emerald-500/6 blur-[150px]" />
-                <div className="pointer-events-none absolute right-[10%] -bottom-[10%] h-[60rem] w-[60rem] rounded-full bg-emerald-400/6 blur-[150px]" />
+                <div className="pointer-events-none absolute -top-[10%] -left-[10%] h-[40rem] w-[40rem] rounded-full bg-emerald-500/5 blur-[100px]" />
+                <div className="pointer-events-none absolute right-[10%] -bottom-[10%] h-[35rem] w-[35rem] rounded-full bg-emerald-400/5 blur-[100px]" />
 
                 {/* Навигация */}
                 <header className="absolute inset-x-0 top-0 z-50">
@@ -110,7 +110,7 @@ export default function Welcome({
                                 <Link href={dashboard()}>
                                     <Button
                                         variant="outline"
-                                        className="border-white/20 bg-white/5 text-white backdrop-blur hover:bg-white/10"
+                                        className="border-white/20 bg-white/5 text-white hover:bg-white/10"
                                     >
                                         {t('welcome.nav.dashboard')}
                                     </Button>
@@ -181,7 +181,7 @@ export default function Welcome({
                                         <Button
                                             size="lg"
                                             variant="outline"
-                                            className="w-full border-white/20 bg-white/5 text-white backdrop-blur hover:bg-white/10 sm:w-auto"
+                                            className="w-full border-white/20 bg-white/5 text-white hover:bg-white/10 sm:w-auto"
                                             onClick={() =>
                                                 document
                                                     .getElementById('learn-more')
@@ -192,6 +192,15 @@ export default function Welcome({
                                                 'welcome.hero.secondary_button',
                                             )}
                                         </Button>
+                                        <Link href="/price-calculator">
+                                            <Button
+                                                size="lg"
+                                                variant="outline"
+                                                className="w-full border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 sm:w-auto"
+                                            >
+                                                {t('welcome.hero.price_button')}
+                                            </Button>
+                                        </Link>
                                     </>
                                 )}
                             </div>
@@ -210,16 +219,16 @@ export default function Welcome({
                         id="learn-more"
                         className="mx-auto mt-8 mb-0 max-w-7xl px-6 lg:px-8"
                     >
-                        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-slate-900/60 px-8 py-16 backdrop-blur-md sm:px-16 sm:py-20">
+                        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/20 bg-slate-900/60 px-8 py-16 sm:px-16 sm:py-20">
                             {/* Animated glow blobs */}
-                            <div className="pointer-events-none absolute -top-20 -left-20 h-72 w-72 animate-pulse rounded-full bg-emerald-500/10 blur-3xl" />
-                            <div className="pointer-events-none absolute -right-20 -bottom-20 h-72 w-72 animate-pulse rounded-full bg-emerald-400/10 blur-3xl [animation-delay:1.5s]" />
+                            <div className="pointer-events-none absolute -top-20 -left-20 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
+                            <div className="pointer-events-none absolute -right-20 -bottom-20 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
 
                             {/* Badge */}
                             <div className="absolute top-6 right-6 z-10 rotate-6">
-                                <div className="flex animate-bounce flex-col items-center justify-center rounded-full bg-emerald-500 px-4 py-3 text-center shadow-lg shadow-emerald-500/40 [animation-duration:2s]">
+                                <div className="flex flex-col items-center justify-center rounded-full bg-emerald-500 px-4 py-3 text-center shadow-lg shadow-emerald-500/40">
                                     <span className="text-xs font-black uppercase leading-tight tracking-wider text-white">СУПЕР</span>
-                                    <span className="text-xs font-black uppercase leading-tight tracking-wider text-white">СКИДКА! 🎉</span>
+                                    <span className="text-xs font-black uppercase leading-tight tracking-wider text-white">СКИДКА!</span>
                                 </div>
                             </div>
 
@@ -286,7 +295,7 @@ export default function Welcome({
                             {features.map((feature) => (
                                 <Card
                                     key={feature.key}
-                                    className="border-slate-400/10 bg-slate-900/30 shadow-xl backdrop-blur-md transition-colors duration-300 hover:border-emerald-500/35"
+                                    className="border-slate-400/10 bg-slate-900/30 shadow-xl transition-colors duration-300 hover:border-emerald-500/35"
                                 >
                                     <CardHeader className="gap-2 pb-3">
                                         {feature.icon}
@@ -337,7 +346,7 @@ export default function Welcome({
                             {steps.map((step) => (
                                 <div
                                     key={step.key}
-                                    className="relative flex flex-col gap-4 rounded-2xl border border-slate-400/10 bg-slate-900/30 p-8 backdrop-blur transition hover:border-emerald-500/35"
+                                    className="relative flex flex-col gap-4 rounded-2xl border border-slate-400/10 bg-slate-900/30 p-8 transition hover:border-emerald-500/35"
                                 >
                                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15">
                                         {step.icon}
@@ -355,7 +364,7 @@ export default function Welcome({
 
                     {/* CTA Section */}
                     <div className="mx-auto mt-32 mb-16 max-w-7xl px-6 lg:px-8">
-                        <div className="relative isolate overflow-hidden rounded-3xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-24 text-center shadow-2xl shadow-black/20 backdrop-blur-md sm:px-16">
+                        <div className="relative isolate overflow-hidden rounded-3xl border border-emerald-500/20 bg-emerald-500/10 px-6 py-24 text-center shadow-2xl shadow-black/20 sm:px-16">
                             <h2 className="mx-auto max-w-2xl text-3xl font-bold text-white sm:text-4xl">
                                 {t('welcome.cta.title')}
                             </h2>
@@ -390,7 +399,7 @@ export default function Welcome({
                 </main>
 
                 {/* Footer */}
-                <footer className="relative mt-auto border-t border-white/10 bg-white/5 backdrop-blur">
+                <footer className="relative mt-auto border-t border-white/10 bg-white/5">
                     <div className="mx-auto flex max-w-7xl items-center justify-center px-6 py-8 lg:px-8">
                         <p className="text-center text-sm text-muted-foreground">
                             {t('welcome.footer')}
