@@ -19,6 +19,7 @@ return [
             'primary_button' => 'Начать работу',
             'secondary_button' => 'Узнать больше',
             'price_button' => 'Узнать цену',
+            'contact_button' => 'Связаться с нами',
             'illustration_alt' => 'Иллюстрация сервиса PechatPRO',
         ],
         'features' => [

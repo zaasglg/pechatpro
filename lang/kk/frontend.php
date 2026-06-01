@@ -19,6 +19,7 @@ return [
             'primary_button' => 'Жұмысты бастау',
             'secondary_button' => 'Толығырақ білу',
             'price_button' => 'Бағасын білу',
+            'contact_button' => 'Бізбен байланысу',
             'illustration_alt' => 'PechatPRO сервисінің иллюстрациясы',
         ],
         'features' => [

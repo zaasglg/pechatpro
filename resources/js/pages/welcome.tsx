@@ -7,6 +7,7 @@ import {
     UploadCloud,
     LayoutDashboard,
     Truck,
+    Phone,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -201,6 +202,16 @@ export default function Welcome({
                                                 {t('welcome.hero.price_button')}
                                             </Button>
                                         </Link>
+                                        <a href="tel:+77767785055">
+                                            <Button
+                                                size="lg"
+                                                variant="outline"
+                                                className="w-full gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10 sm:w-auto"
+                                            >
+                                                <Phone className="h-4 w-4" />
+                                                {t('welcome.hero.contact_button')}
+                                            </Button>
+                                        </a>
                                     </>
                                 )}
                             </div>
@@ -371,7 +382,7 @@ export default function Welcome({
                             <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-emerald-50/90">
                                 {t('welcome.cta.description')}
                             </p>
-                            <div className="mt-10 flex items-center justify-center gap-x-6">
+                            <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
                                 {auth.user ? (
                                     <Link href={dashboard()}>
                                         <Button
@@ -393,6 +404,16 @@ export default function Welcome({
                                         </Button>
                                     </Link>
                                 )}
+                                <a href="tel:+77767785055">
+                                    <Button
+                                        size="lg"
+                                        variant="outline"
+                                        className="gap-2 border-white/20 bg-white/5 text-white hover:bg-white/10"
+                                    >
+                                        <Phone className="h-4 w-4" />
+                                        {t('welcome.hero.contact_button')}
+                                    </Button>
+                                </a>
                             </div>
                         </div>
                     </div>

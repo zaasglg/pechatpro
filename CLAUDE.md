@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Development
 ```bash
 composer run dev          # Start all services: Laravel, queue, Pail log viewer, and Vite
+composer run setup        # Initial project setup (install deps, migrate, build)
 ```
 
 ### Building
@@ -80,16 +81,35 @@ Projects move through six ordered stages defined in `ProjectStageDefinition`:
 - `currentProjectStage()` — returns the active (or next pending, or last) stage
 - Stage assignments (montage/print users) are stored in the `project_stage_user` pivot table
 
+### File Upload System
+Large files use a browser-side multipart S3 upload flow rather than a direct server upload:
+
+1. Frontend (`lib/multipart-upload.ts`) splits files ≥50 MB into 10 MB chunks (3 concurrent), resuming from `localStorage` on failure
+2. `UploadController` orchestrates via `MultipartUploadService`: create → sign presigned URLs per part → complete
+3. The `Upload` model tracks in-progress uploads; `POST uploads/{uploadId}/finalize` associates the completed S3 key with the correct project entity (source image, montage asset, or design file)
+4. `CleanupUploads` artisan command purges orphaned upload records
+
+Storage backend is S3-compatible (IDrive e2). Public URLs are generated via `PublicStorageUrl::make($path)`.
+
+### Image Previews
+`AbstractImagePreviewGenerator` is the base for preview generation. Two concrete implementations:
+- `ProjectSourceImagePreviewGenerator` — source images uploaded by photographers
+- `ProjectMontageAssetPreviewGenerator` — assets uploaded by montage/designers
+
 ### Client Access
 Clients access project selection and montage review via token URLs without authentication:
 - `GET client/projects/{token}` — photo selection
 - `GET client/montage-reviews/{token}` — montage review
 
+### Inertia Page Naming
+`Inertia::render('some/page-name')` maps to `resources/js/pages/some/page-name.tsx`. Pages are organized by role (e.g. `pages/admin/`, `pages/moderator/`, `pages/montage/`, `pages/print/`, `pages/client/`).
+
 ### Key Directories
 - `app/Models/` — Eloquent models; uses PHP 8 attribute syntax (`#[Fillable]`, `#[Hidden]`, `#[Appends]`)
 - `app/Http/Controllers/Admin/` — Admin + moderator controllers
 - `app/Http/Controllers/Concerns/` — Controller traits (e.g. `ResolvesAssignedMontageProject`)
-- `app/Support/` — Standalone service classes: `ProjectPricingCalculator`, `PhoneNumber`, `PublicStorageUrl`
+- `app/Support/` — Standalone service classes: `ProjectPricingCalculator`, `PhoneNumber`, `PublicStorageUrl`, image preview generators
+- `app/Services/MultipartUploadService.php` — S3 multipart upload orchestration
 - `resources/js/pages/` — Inertia page components (maps to controller `Inertia::render('page-name')`)
 - `resources/js/components/` — Shared React components
 - `resources/js/actions/` & `resources/js/routes/` — Auto-generated Wayfinder typed route functions
@@ -102,11 +122,11 @@ Defined in `HandleInertiaRequests::share()`. Every page receives:
 - `flash.toast` — `{ message, type }` for toast notifications (set via `session()->put('toast', [...])`)
 - `sidebarOpen` — sidebar state from cookie
 
+### Frontend i18n
+Use the `useTranslations()` hook (`hooks/use-translations.ts`) — never access `localization.translations` directly from `usePage()`. It exposes `t(key, fallback?)` for dot-notation key lookup and `currentLocale`. Locale switching is `POST /locale`.
+
 ### Pricing
 `app/Support/ProjectPricingCalculator.php` contains hardcoded album pricing rules (album type × size × cover type). This is the source of truth for unit and total price calculation.
-
-### Image Storage
-Public images are served via `PublicStorageUrl::make($path)` which generates signed or direct public URLs. Source images and montage assets use this pattern.
 
 ### Testing
 - Tests use Pest v4 with the Laravel plugin
